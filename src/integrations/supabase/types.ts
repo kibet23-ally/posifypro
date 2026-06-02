@@ -21,6 +21,7 @@ export type Database = {
           id: string
           loyalty_points: number | null
           name: string
+          org_id: string | null
           phone: string | null
           total_spent: number | null
           updated_at: string | null
@@ -32,6 +33,7 @@ export type Database = {
           id?: string
           loyalty_points?: number | null
           name: string
+          org_id?: string | null
           phone?: string | null
           total_spent?: number | null
           updated_at?: string | null
@@ -43,10 +45,76 @@ export type Database = {
           id?: string
           loyalty_points?: number | null
           name?: string
+          org_id?: string | null
           phone?: string | null
           total_spent?: number | null
           updated_at?: string | null
           visit_count?: number | null
+        }
+        Relationships: []
+      }
+      organization_members: {
+        Row: {
+          created_at: string
+          org_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          org_id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          org_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          license_expires_at: string | null
+          license_status: string
+          name: string
+          owner_id: string
+          purchased_at: string | null
+          stripe_payment_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          license_expires_at?: string | null
+          license_status?: string
+          name: string
+          owner_id: string
+          purchased_at?: string | null
+          stripe_payment_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          license_expires_at?: string | null
+          license_status?: string
+          name?: string
+          owner_id?: string
+          purchased_at?: string | null
+          stripe_payment_id?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -61,6 +129,7 @@ export type Database = {
           is_active: boolean | null
           low_stock_threshold: number | null
           name: string
+          org_id: string | null
           price: number
           stock: number | null
           updated_at: string | null
@@ -75,6 +144,7 @@ export type Database = {
           is_active?: boolean | null
           low_stock_threshold?: number | null
           name: string
+          org_id?: string | null
           price: number
           stock?: number | null
           updated_at?: string | null
@@ -89,6 +159,7 @@ export type Database = {
           is_active?: boolean | null
           low_stock_threshold?: number | null
           name?: string
+          org_id?: string | null
           price?: number
           stock?: number | null
           updated_at?: string | null
@@ -103,6 +174,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string | null
+          org_id: string | null
           role: string | null
         }
         Insert: {
@@ -112,6 +184,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           name?: string | null
+          org_id?: string | null
           role?: string | null
         }
         Update: {
@@ -121,6 +194,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string | null
+          org_id?: string | null
           role?: string | null
         }
         Relationships: []
@@ -130,6 +204,7 @@ export type Database = {
           cost_price: number | null
           created_at: string | null
           id: string
+          org_id: string | null
           product_emoji: string | null
           product_id: string | null
           product_name: string
@@ -142,6 +217,7 @@ export type Database = {
           cost_price?: number | null
           created_at?: string | null
           id?: string
+          org_id?: string | null
           product_emoji?: string | null
           product_id?: string | null
           product_name: string
@@ -154,6 +230,7 @@ export type Database = {
           cost_price?: number | null
           created_at?: string | null
           id?: string
+          org_id?: string | null
           product_emoji?: string | null
           product_id?: string | null
           product_name?: string
@@ -183,6 +260,7 @@ export type Database = {
           discount_amount: number | null
           discount_pct: number | null
           id: string
+          org_id: string | null
           payment_method: string | null
           receipt_number: string
           status: string | null
@@ -202,6 +280,7 @@ export type Database = {
           discount_amount?: number | null
           discount_pct?: number | null
           id?: string
+          org_id?: string | null
           payment_method?: string | null
           receipt_number: string
           status?: string | null
@@ -221,6 +300,7 @@ export type Database = {
           discount_amount?: number | null
           discount_pct?: number | null
           id?: string
+          org_id?: string | null
           payment_method?: string | null
           receipt_number?: string
           status?: string | null
@@ -242,6 +322,7 @@ export type Database = {
           currency_symbol: string | null
           id: string
           kra_pin: string | null
+          org_id: string | null
           receipt_footer: string | null
           tax_rate: number | null
           updated_at: string | null
@@ -255,6 +336,7 @@ export type Database = {
           currency_symbol?: string | null
           id?: string
           kra_pin?: string | null
+          org_id?: string | null
           receipt_footer?: string | null
           tax_rate?: number | null
           updated_at?: string | null
@@ -268,6 +350,7 @@ export type Database = {
           currency_symbol?: string | null
           id?: string
           kra_pin?: string | null
+          org_id?: string | null
           receipt_footer?: string | null
           tax_rate?: number | null
           updated_at?: string | null
@@ -279,10 +362,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_org: { Args: { _user_id: string }; Returns: string }
+      has_org_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_org_member: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "owner" | "manager" | "cashier"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -409,6 +503,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["owner", "manager", "cashier"],
+    },
   },
 } as const
