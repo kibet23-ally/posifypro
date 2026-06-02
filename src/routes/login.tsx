@@ -1,3 +1,4 @@
+// src/routes/login.tsx
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -8,11 +9,12 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ShoppingBag } from "lucide-react";
 import { signIn, resetPassword } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
 function LoginPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "reset">("signin");
   const [email, setEmail] = useState("");
@@ -21,8 +23,22 @@ function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
-    if (user) navigate({ to: "/app/dashboard", replace: true });
-  }, [user, navigate]);
+    if (!loading && user) {
+      // Check if super admin → redirect to /admin
+      supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.role === 'super_admin') {
+            navigate({ to: '/admin', replace: true })
+          } else {
+            navigate({ to: '/dashboard', replace: true })
+          }
+        })
+    }
+  }, [user, loading, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +46,7 @@ function LoginPage() {
     try {
       await signIn(email, password);
       toast.success("Welcome back!");
-      navigate({ to: "/app/dashboard" });
+      // redirect handled by useEffect above
     } catch (err: any) {
       toast.error(err.message ?? "Invalid email or password");
     } finally {
@@ -54,7 +70,7 @@ function LoginPage() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
-      {/* Left panel */}
+      {/* Left panel — desktop only */}
       <div className="hidden lg:flex flex-col justify-between p-12 bg-sidebar text-sidebar-foreground">
         <Link to="/" className="flex items-center gap-2 text-xl font-semibold">
           <ShoppingBag className="size-6 text-primary" />
