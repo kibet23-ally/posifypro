@@ -18,7 +18,7 @@ export const Route = createFileRoute('/admin')({
       .single()
 
     if (!profile || profile.role !== 'super_admin') {
-      throw redirect({ to: '/app/dashboard' })
+      throw redirect({ to: '/dashboard' })
     }
   },
   component: SuperAdminDashboard,
