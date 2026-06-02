@@ -1,7 +1,8 @@
 import { createFileRoute, Outlet, Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { ShoppingCart, Package, Users, Receipt, Settings, LayoutDashboard, LogOut, ShoppingBag } from "lucide-react";
+import { useOrg } from "@/hooks/use-org";
+import { ShoppingCart, Package, Users, Receipt, Settings, LayoutDashboard, LogOut, ShoppingBag, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
@@ -17,6 +18,7 @@ const nav = [
 
 function AppLayout() {
   const { user, loading, signOut } = useAuth();
+  const { org, isLifetime, isTrialActive, isExpired, trialDaysLeft, loading: orgLoading } = useOrg();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -24,7 +26,7 @@ function AppLayout() {
     if (!loading && !user) navigate({ to: "/login", replace: true });
   }, [user, loading, navigate]);
 
-  if (loading || !user) {
+  if (loading || !user || orgLoading) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
   }
 
@@ -35,6 +37,12 @@ function AppLayout() {
           <ShoppingBag className="size-5 text-primary" />
           POSify Pro
         </div>
+        {org && (
+          <div className="px-5 pb-3 -mt-2">
+            <div className="text-xs text-sidebar-foreground/50">Business</div>
+            <div className="text-sm font-medium truncate">{org.name}</div>
+          </div>
+        )}
         <nav className="flex-1 px-3 space-y-1">
           {nav.map((n) => {
             const active = location.pathname.startsWith(n.to);
@@ -57,6 +65,19 @@ function AppLayout() {
           <div className="flex items-center gap-2 font-semibold"><ShoppingBag className="size-5 text-primary" />POSify Pro</div>
           <Button variant="ghost" size="sm" onClick={async () => { await signOut(); navigate({ to: "/login" }); }}><LogOut className="size-4" /></Button>
         </header>
+
+        {!isLifetime && (
+          <div className={`px-4 py-2 text-sm flex items-center justify-between gap-3 ${isExpired ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning-foreground"}`}>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="size-4" />
+              {isExpired
+                ? "Your free trial has ended. Upgrade to keep using POSify Pro."
+                : `Free trial: ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left.`}
+            </div>
+            <Link to="/pricing"><Button size="sm" variant={isExpired ? "destructive" : "default"}>Upgrade</Button></Link>
+          </div>
+        )}
+
         <main className="flex-1 overflow-auto">
           <Outlet />
         </main>

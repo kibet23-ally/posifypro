@@ -10,11 +10,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Plus, Trash2 } from "lucide-react";
 import { fmtMoney } from "@/lib/format";
 import { toast } from "sonner";
+import { useOrg } from "@/hooks/use-org";
 
 export const Route = createFileRoute("/_app/customers")({ component: CustomersPage });
 
 function CustomersPage() {
   const qc = useQueryClient();
+  const { orgId } = useOrg();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "" });
 
@@ -25,7 +27,8 @@ function CustomersPage() {
 
   const add = async () => {
     if (!form.name) { toast.error("Name required"); return; }
-    const { error } = await supabase.from("customers").insert(form);
+    if (!orgId) { toast.error("No organization found"); return; }
+    const { error } = await supabase.from("customers").insert({ ...form, org_id: orgId });
     if (error) { toast.error(error.message); return; }
     toast.success("Customer added");
     setOpen(false); setForm({ name: "", phone: "", email: "" });

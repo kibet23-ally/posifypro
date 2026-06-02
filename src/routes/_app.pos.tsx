@@ -10,6 +10,7 @@ import { Plus, Minus, Trash2, Search, X } from "lucide-react";
 import { fmtMoney, genReceiptNo } from "@/lib/format";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { useOrg } from "@/hooks/use-org";
 
 export const Route = createFileRoute("/_app/pos")({ component: POS });
 
@@ -17,6 +18,7 @@ type CartItem = { id: string; name: string; emoji: string | null; price: number;
 
 function POS() {
   const { user } = useAuth();
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -80,9 +82,11 @@ function POS() {
   const checkout = async () => {
     if (cart.length === 0) return;
     if (paymentMethod === "Cash" && cashNum < total) { toast.error("Cash received is less than total"); return; }
+    if (!orgId) { toast.error("No organization found"); return; }
 
     const receipt_number = genReceiptNo();
     const { data: sale, error } = await supabase.from("sales").insert({
+      org_id: orgId,
       receipt_number, subtotal, tax_amount: tax, tax_rate: taxRate, discount_amount: discount, discount_pct: discountPct,
       total, payment_method: paymentMethod, cash_received: paymentMethod === "Cash" ? cashNum : total,
       change_given: change, status: "completed", synced: true, customer_name: "Walk-in",
@@ -92,6 +96,7 @@ function POS() {
     if (error || !sale) { toast.error(error?.message || "Failed to record sale"); return; }
 
     const items = cart.map((i) => ({
+      org_id: orgId,
       sale_id: sale.id, product_id: i.id, product_name: i.name, product_emoji: i.emoji,
       unit_price: i.price, cost_price: i.cost_price, quantity: i.quantity, subtotal: i.price * i.quantity,
     }));
