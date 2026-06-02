@@ -1,3 +1,4 @@
+// src/routes/onboarding.tsx
 import { createFileRoute } from '@tanstack/react-router'
 import Onboarding from '@/pages/Onboarding'
 
