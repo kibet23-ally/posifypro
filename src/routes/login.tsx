@@ -7,89 +7,166 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ShoppingBag } from "lucide-react";
+import { signIn, resetPassword } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
 function LoginPage() {
-  const { user, signIn, signUp } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [businessName, setBusinessName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
-  useEffect(() => { if (user) navigate({ to: "/dashboard", replace: true }); }, [user, navigate]);
+  useEffect(() => {
+    if (user) navigate({ to: "/app/dashboard", replace: true });
+  }, [user, navigate]);
 
-  const submit = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signin") {
-        const { error } = await signIn(email, password);
-        if (error) { toast.error(error.message); return; }
-        toast.success("Welcome back!");
-      } else {
-        if (!businessName.trim()) { toast.error("Business name is required"); return; }
-        const { error } = await signUp(email, password, name, businessName);
-        if (error) { toast.error(error.message); return; }
-        toast.success("Account created — sign in to continue.");
-        setMode("signin");
-      }
-    } finally { setBusy(false); }
+      await signIn(email, password);
+      toast.success("Welcome back!");
+      navigate({ to: "/app/dashboard" });
+    } catch (err: any) {
+      toast.error(err.message ?? "Invalid email or password");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) { toast.error("Enter your email address"); return; }
+    setBusy(true);
+    try {
+      await resetPassword(email);
+      setResetSent(true);
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not send reset email");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
+      {/* Left panel */}
       <div className="hidden lg:flex flex-col justify-between p-12 bg-sidebar text-sidebar-foreground">
         <Link to="/" className="flex items-center gap-2 text-xl font-semibold">
           <ShoppingBag className="size-6 text-primary" />
-          POSify Pro
+          PosifyPro
         </Link>
         <div>
-          <h1 className="text-4xl font-bold leading-tight">The modern POS<br />for ambitious shops.</h1>
-          <p className="mt-4 text-sidebar-foreground/70 max-w-md">14-day free trial. One-time license. No recurring fees.</p>
+          <h1 className="text-4xl font-bold leading-tight">
+            The smart POS<br />for modern businesses.
+          </h1>
+          <p className="mt-4 text-sidebar-foreground/70 max-w-md">
+            Multi-tenant. Real-time. Built for Africa.
+          </p>
         </div>
-        <div className="text-xs text-sidebar-foreground/50">© {new Date().getFullYear()} POSify Pro</div>
+        <div className="text-xs text-sidebar-foreground/50">
+          © {new Date().getFullYear()} PosifyPro
+        </div>
       </div>
+
+      {/* Right panel */}
       <div className="flex items-center justify-center p-6">
         <Card className="w-full max-w-md p-8">
           <Link to="/" className="lg:hidden flex items-center gap-2 text-lg font-semibold mb-6">
-            <ShoppingBag className="size-5 text-primary" /> POSify Pro
+            <ShoppingBag className="size-5 text-primary" /> PosifyPro
           </Link>
-          <h2 className="text-2xl font-semibold">{mode === "signin" ? "Sign in" : "Create your shop"}</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === "signin" ? "Welcome back to POSify Pro." : "Start your 14-day free trial."}
-          </p>
-          <form onSubmit={submit} className="mt-6 space-y-4">
-            {mode === "signup" && (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="name">Your name</Label>
-                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="biz">Business name</Label>
-                  <Input id="biz" placeholder="e.g. Java Corner Café" value={businessName} onChange={(e) => setBusinessName(e.target.value)} required />
-                </div>
-              </>
-            )}
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+
+          {resetSent ? (
+            <div className="text-center py-4">
+              <div className="text-5xl mb-4">📧</div>
+              <h2 className="text-xl font-semibold mb-2">Check your email</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                We sent a password reset link to <strong>{email}</strong>
+              </p>
+              <button
+                onClick={() => { setMode("signin"); setResetSent(false); }}
+                className="text-sm text-primary hover:underline font-medium"
+              >
+                ← Back to sign in
+              </button>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-            </div>
-            <Button type="submit" disabled={busy} className="w-full">
-              {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
-            </Button>
-          </form>
-          <button onClick={() => setMode(mode === "signin" ? "signup" : "signin")} className="mt-4 text-sm text-muted-foreground hover:text-foreground w-full text-center">
-            {mode === "signin" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-          </button>
+          ) : (
+            <>
+              <h2 className="text-2xl font-semibold">
+                {mode === "signin" ? "Sign in" : "Reset password"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1 mb-6">
+                {mode === "signin"
+                  ? "Welcome back to PosifyPro."
+                  : "We'll send you a reset link."}
+              </p>
+
+              <form onSubmit={mode === "signin" ? handleSignIn : handleReset} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jane@mybusiness.com"
+                    required
+                  />
+                </div>
+
+                {mode === "signin" && (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <Label htmlFor="password">Password</Label>
+                      <button
+                        type="button"
+                        onClick={() => setMode("reset")}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                )}
+
+                <Button type="submit" disabled={busy} className="w-full">
+                  {busy
+                    ? "Please wait…"
+                    : mode === "signin"
+                    ? "Sign in"
+                    : "Send Reset Link"}
+                </Button>
+              </form>
+
+              {mode === "reset" ? (
+                <button
+                  onClick={() => setMode("signin")}
+                  className="mt-4 text-sm text-muted-foreground hover:text-foreground w-full text-center"
+                >
+                  ← Back to sign in
+                </button>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground text-center">
+                  New business?{" "}
+                  <Link to="/onboarding" className="text-primary hover:underline font-medium">
+                    Create a free account
+                  </Link>
+                </p>
+              )}
+            </>
+          )}
         </Card>
       </div>
     </div>
