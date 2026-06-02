@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useOrg } from "@/hooks/use-org";
 
 export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
 
 function SettingsPage() {
   const qc = useQueryClient();
+  const { orgId } = useOrg();
   const { data: s } = useQuery({
     queryKey: ["settings"],
     queryFn: async () => (await supabase.from("settings").select("*").limit(1).maybeSingle()).data,
@@ -32,7 +34,8 @@ function SettingsPage() {
   }, [s]);
 
   const save = async () => {
-    if (!s) { await supabase.from("settings").insert(form); }
+    if (!orgId) { toast.error("No organization found"); return; }
+    if (!s) { await supabase.from("settings").insert({ ...form, org_id: orgId }); }
     else { await supabase.from("settings").update(form).eq("id", s.id); }
     toast.success("Settings saved");
     qc.invalidateQueries({ queryKey: ["settings"] });

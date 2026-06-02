@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { fmtMoney } from "@/lib/format";
 import { toast } from "sonner";
+import { useOrg } from "@/hooks/use-org";
 
 export const Route = createFileRoute("/_app/products")({ component: ProductsPage });
 
@@ -18,6 +19,7 @@ const empty: Form = { name: "", price: 0, cost_price: 0, stock: 0, category_name
 
 function ProductsPage() {
   const qc = useQueryClient();
+  const { orgId } = useOrg();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Form>(empty);
@@ -31,7 +33,8 @@ function ProductsPage() {
 
   const save = async () => {
     if (!form.name || form.price <= 0) { toast.error("Name and price are required"); return; }
-    const payload = { ...form, is_active: true };
+    if (!orgId) { toast.error("No organization found"); return; }
+    const payload = { ...form, is_active: true, org_id: orgId };
     const { error } = form.id
       ? await supabase.from("products").update(payload).eq("id", form.id)
       : await supabase.from("products").insert(payload);
