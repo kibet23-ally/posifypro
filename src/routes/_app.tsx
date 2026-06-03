@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useOrg } from "@/hooks/use-org";
 import {
   ShoppingCart, Package, Users, Receipt, Settings,
-  LayoutDashboard, LogOut, ShoppingBag, AlertTriangle,
+  LayoutDashboard, LogOut, ShoppingBag,
   UserPlus, Menu, X, ChevronRight, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -215,28 +215,7 @@ function AppLayout() {
             </div>
           </div>
 
-          {/* Quick actions */}
-          <div className="flex items-center gap-2">
-            {/* Trial warning chip */}
-            {!isLifetime && isExpired && (
-              <Link to="/pricing">
-                <div className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-destructive bg-destructive/10 px-3 py-1.5 rounded-lg border border-destructive/20">
-                  <AlertTriangle className="size-3" /> Trial ended
-                </div>
-              </Link>
-            )}
-            {!isLifetime && isTrialActive && (
-              <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/8 px-3 py-1.5 rounded-lg border border-primary/20">
-                ⏳ {trialDaysLeft}d left
-              </div>
-            )}
-            {/* Quick sale button */}
-            <Link to="/pos">
-              <Button size="sm" className="h-8 gap-1.5 text-xs">
-                <ShoppingCart className="size-3.5" /> New Sale
-              </Button>
-            </Link>
-          </div>
+
         </header>
 
         {/* ── PAGE CONTENT ── */}
