@@ -11,9 +11,9 @@ import {
   LayoutDashboard, Building2, TrendingUp, Users, Crown,
   Shield, UserCheck, CheckCircle2, XCircle, LogOut, Zap,
   RefreshCw, Search, X, ChevronRight, Bell, Settings,
-  FileText, AlertTriangle, Menu, MessageSquare,
+  AlertTriangle,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 
 // ─────────────────────────────────────────────
 // Types
@@ -418,12 +418,6 @@ export default function SuperAdminDashboard() {
           position: "sticky", top: 0, zIndex: 10,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={() => setSidebarOpen(true)} style={{
-              display: "none", background: "none", border: "none", cursor: "pointer", color: "#64748b",
-              // show on mobile via JS check
-            }} id="mobile-menu-btn">
-              <Menu style={{ width: "20px", height: "20px" }} />
-            </button>
             <div>
               <h1 style={{ margin: 0, fontWeight: "700", fontSize: "15px", color: "#0f172a" }}>
                 {SIDEBAR_ITEMS.find(s => s.id === tab)?.label}
@@ -458,7 +452,6 @@ export default function SuperAdminDashboard() {
           {/* ════════════════════════════════
               OVERVIEW
           ════════════════════════════════ */}
-          
           {tab === "overview" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "22px" }}>
 
@@ -1015,4 +1008,5 @@ export default function SuperAdminDashboard() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
-  ); 
+  );
+}
