@@ -44,8 +44,9 @@ function Dashboard() {
     queryFn: async () => {
       // Get tenant
       const { data: profile } = await supabase
-        .from("profiles").select("tenant_id").eq("id", user!.id).single();
+        .from("profiles").select("tenant_id, tenants(name, currency)").eq("id", user!.id).single();
       const tid = profile?.tenant_id;
+      const businessName = (profile?.tenants as any)?.name ?? null;
 
       const now = new Date();
       const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
@@ -105,6 +106,7 @@ function Dashboard() {
         lowStock: lowStock.data ?? [],
         recentOrders: recentOrders.data ?? [],
         days7, paymentChart,
+        businessName,
         revenueGrowth: yesterdayRevenue > 0 ? Math.round(((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100) : 0,
         orderGrowth: yesterdayCount > 0 ? Math.round(((todayCount - yesterdayCount) / yesterdayCount) * 100) : 0,
       };
@@ -172,7 +174,7 @@ function Dashboard() {
             Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"} 👋
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {org?.name ?? "Your Store"} · {new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long" })}
+            {data?.businessName ?? org?.name ?? "Your Store"} · {new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
         <Link to="/pos">
