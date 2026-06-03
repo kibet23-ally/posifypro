@@ -1074,6 +1074,4 @@ export default function SuperAdminDashboard() {
       `}</style>
     </div>
   );
-}
-
-   
+}  
