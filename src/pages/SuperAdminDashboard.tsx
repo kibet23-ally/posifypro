@@ -303,6 +303,12 @@ export default function SuperAdminDashboard() {
   // Render
   // ─────────────────────────────────────────────
   const sidebarW = 240;
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#f8fafc", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
@@ -319,12 +325,15 @@ export default function SuperAdminDashboard() {
         <aside style={{
           width: `${sidebarW}px`, background: "#0f172a", display: "flex",
           flexDirection: "column", flexShrink: 0, height: "100vh",
-          position: "sticky", top: 0,
-          // Mobile: slide in/out
-          ...(typeof window !== "undefined" && window.innerWidth < 768 ? {
-            position: "fixed" as any, left: sidebarOpen ? 0 : `-${sidebarW}px`,
-            zIndex: 50, transition: "left 0.3s",
-          } : {}),
+          ...(isMobile ? {
+            position: "fixed" as any,
+            left: sidebarOpen ? 0 : `-${sidebarW}px`,
+            top: 0, zIndex: 50,
+            transition: "left 0.25s ease",
+          } : {
+            position: "sticky" as any,
+            top: 0,
+          }),
         }}>
           {/* Logo */}
           <div style={{ padding: "20px 20px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
@@ -412,34 +421,57 @@ export default function SuperAdminDashboard() {
 
         {/* Top bar */}
         <div style={{
-          background: "#fff", borderBottom: "1px solid #e2e8f0",
-          padding: "0 24px", height: "56px", display: "flex",
+          background: "#0f172a", borderBottom: "1px solid rgba(255,255,255,0.07)",
+          padding: "0 20px", height: "62px", display: "flex",
           alignItems: "center", justifyContent: "space-between",
-          position: "sticky", top: 0, zIndex: 10,
+          position: "sticky", top: 0, zIndex: 10, flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* Hamburger toggle */}
+            <button onClick={() => setSidebarOpen(o => !o)} style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "8px", padding: "7px 9px", cursor: "pointer", color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {sidebarOpen
+                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              }
+            </button>
             <div>
-              <h1 style={{ margin: 0, fontWeight: "700", fontSize: "15px", color: "#0f172a" }}>
-                {SIDEBAR_ITEMS.find(s => s.id === tab)?.label}
-              </h1>
-              <p style={{ margin: 0, fontSize: "11px", color: "#94a3b8" }}>
-                {new Date().toLocaleDateString("en-KE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-              </p>
+              {/* Brand + badge */}
+              <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "2px" }}>
+                <span style={{ color: "#fff", fontWeight: "800", fontSize: "14px", letterSpacing: "-0.3px" }}>
+                  ⚡ PosifyPro
+                </span>
+                <span style={{
+                  background: "linear-gradient(135deg,#f59e0b,#ef4444)", borderRadius: "99px",
+                  padding: "1px 8px", fontSize: "9px", fontWeight: "800", color: "#fff", letterSpacing: "0.8px",
+                }}>SUPER ADMIN</span>
+              </div>
+              {/* Date · time · page */}
+              <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", gap: "4px" }}>
+                <span>{new Date().toLocaleDateString("en-KE", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+                <span>·</span>
+                <span>{new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}</span>
+                <span>·</span>
+                <span style={{ color: "#a5b4fc", fontWeight: "600" }}>{SIDEBAR_ITEMS.find(s => s.id === tab)?.label}</span>
+              </div>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {/* Live status */}
             <div style={{
-              background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px",
-              padding: "5px 11px", display: "flex", alignItems: "center", gap: "5px",
-              fontSize: "11px", fontWeight: "600", color: "#16a34a",
+              background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)",
+              borderRadius: "8px", padding: "5px 11px", display: "flex", alignItems: "center", gap: "5px",
+              fontSize: "11px", fontWeight: "600", color: "#34d399",
             }}>
-              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#34d399", display: "inline-block" }} />
               {kpi?.activeTenants ?? 0} live
             </div>
             <button
               onClick={() => { setRefreshing(true); fetchData(); }}
-              style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", color: "#64748b" }}
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "7px 9px", cursor: "pointer", color: "#94a3b8", display: "flex" }}
             >
               <RefreshCw style={{ width: "14px", height: "14px", animation: refreshing ? "spin 1s linear infinite" : "none" }} />
             </button>
@@ -447,7 +479,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Page content */}
-        <div style={{ flex: 1, padding: "24px", overflowY: "auto" }}>
+        <div style={{ flex: 1, padding: "24px", overflowY: "auto", paddingBottom: isMobile ? "80px" : "24px" }}>
 
           {/* ════════════════════════════════
               OVERVIEW
@@ -703,7 +735,7 @@ export default function SuperAdminDashboard() {
                   </div>
 
                   {/* Quick stats — no revenue */}
-                  <div style={{ display: "flex", gap: "12px", marginBottom: "18px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "12px", marginBottom: "18px", flexWrap: "wrap" }}>
                     {[
                       { label: "Staff",    value: selectedTenant.staff_count, icon: "👥" },
                       { label: "Orders",   value: selectedTenant.order_count, icon: "🧾" },
@@ -1002,6 +1034,39 @@ export default function SuperAdminDashboard() {
             </div>
           )}
         </div>
+
+        {/* Mobile bottom nav */}
+        {isMobile && (
+          <div style={{
+            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30,
+            background: "#0f172a", borderTop: "1px solid rgba(255,255,255,0.08)",
+            display: "grid", gridTemplateColumns: "repeat(6, 1fr)",
+            padding: "6px 0 10px",
+          }}>
+            {SIDEBAR_ITEMS.map(item => {
+              const active = tab === item.id;
+              return (
+                <button key={item.id} onClick={() => { setTab(item.id as AdminTab); setSidebarOpen(false); }}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
+                    background: "none", border: "none", cursor: "pointer",
+                    color: active ? "#a5b4fc" : "rgba(255,255,255,0.35)",
+                    padding: "4px 2px",
+                  }}>
+                  <item.icon style={{ width: "18px", height: "18px" }} />
+                  <span style={{ fontSize: "8px", fontWeight: active ? "700" : "400" }}>
+                    {item.label.split(" ")[0]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      </div>
+      </div>
+      </div>
       </div>
 
       <style>{`
@@ -1010,3 +1075,5 @@ export default function SuperAdminDashboard() {
     </div>
   );
 }
+
+   
