@@ -1035,6 +1035,13 @@ export default function SuperAdminDashboard() {
           )}
         </div>
 
-        {/* Mobile bottom nav removed for SaaS drawer UI */}
+{/* Mobile bottom nav removed for SaaS drawer UI */}
+<style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
   );
-}  
+}
