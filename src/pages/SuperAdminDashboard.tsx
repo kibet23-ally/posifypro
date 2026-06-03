@@ -1035,41 +1035,6 @@ export default function SuperAdminDashboard() {
           )}
         </div>
 
-        {/* Mobile bottom nav */}
-        {isMobile && (
-          <div style={{
-            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30,
-            background: "#0f172a", borderTop: "1px solid rgba(255,255,255,0.08)",
-            display: "grid", gridTemplateColumns: "repeat(6, 1fr)",
-            padding: "6px 0 10px",
-          }}>
-            {SIDEBAR_ITEMS.map(item => {
-              const active = tab === item.id;
-              return (
-                <button key={item.id} onClick={() => { setTab(item.id as AdminTab); setSidebarOpen(false); }}
-                  style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
-                    background: "none", border: "none", cursor: "pointer",
-                    color: active ? "#a5b4fc" : "rgba(255,255,255,0.35)",
-                    padding: "4px 2px",
-                  }}>
-                  <item.icon style={{ width: "18px", height: "18px" }} />
-                  <span style={{ fontSize: "8px", fontWeight: active ? "700" : "400" }}>
-                    {item.label.split(" ")[0]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+        {/* Mobile bottom nav removed for SaaS drawer UI */}
   );
 }  
