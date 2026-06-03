@@ -9,7 +9,7 @@ import {
   UserPlus, Menu, X, ChevronRight, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link as RouterLink } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
@@ -25,6 +25,20 @@ const NAV = [
 
 function AppLayout() {
   const { user, loading, signOut } = useAuth();
+  const [businessName, setBusinessName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("tenants(name)")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        const name = (data?.tenants as any)?.name;
+        if (name) setBusinessName(name);
+      });
+  }, [user]);
   const { org, isLifetime, isTrialActive, isExpired, trialDaysLeft, loading: orgLoading } = useOrg();
   const navigate = useNavigate();
   const location = useLocation();
@@ -93,7 +107,7 @@ function AppLayout() {
           {org && (
             <div className="mt-3 px-1">
               <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40 mb-0.5">Business</div>
-              <div className="text-sm font-semibold truncate text-sidebar-foreground">{org.name}</div>
+              <div className="text-sm font-semibold truncate text-sidebar-foreground">{businessName ?? org?.name ?? "Your Store"}</div>
             </div>
           )}
         </div>
@@ -151,7 +165,7 @@ function AppLayout() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-medium truncate text-sidebar-foreground">{user.email}</div>
-              <div className="text-[10px] text-sidebar-foreground/50 capitalize">{org?.name ?? "Store"}</div>
+              <div className="text-[10px] text-sidebar-foreground/50 capitalize">{businessName ?? org?.name ?? "Store"}</div>
             </div>
           </div>
           <Button
