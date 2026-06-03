@@ -1036,7 +1036,8 @@ export default function SuperAdminDashboard() {
         </div>
 
 {/* Mobile bottom nav removed for SaaS drawer UI */}
-<style>{`
+
+      <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
