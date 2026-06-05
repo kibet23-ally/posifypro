@@ -1,5 +1,5 @@
 // src/hooks/use-org.tsx
-// Updated to use `tenants` table instead of `organizations`
+// Reads the user's organization from the actual `organizations` schema.
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./use-auth";
@@ -14,40 +14,51 @@ export function useOrg() {
       (await supabase.from("profiles").select("*").eq("id", user!.id).maybeSingle()).data,
   });
 
-  // tenant_id comes from our multi-tenant profiles table
-  const tenantId = profile?.tenant_id ?? null;
+  const orgId = (profile as any)?.org_id ?? null;
 
   const { data: org, isLoading: orgLoading } = useQuery({
-    enabled: !!tenantId,
-    queryKey: ["tenant", tenantId],
+    enabled: !!orgId,
+    queryKey: ["organization", orgId],
     queryFn: async () =>
-      (await supabase.from("tenants").select("*").eq("id", tenantId!).maybeSingle()).data,
+      (await supabase.from("organizations").select("*").eq("id", orgId!).maybeSingle()).data,
   });
 
-  // Map tenants fields to what the app expects
-  // tenants.plan: 'free' | 'basic' | 'pro'
-  // We treat 'pro' as lifetime, 'basic'/'free' as trial-like
-  const isLifetime = org?.plan === "pro";
-  const isTrialActive = org?.plan === "basic" && org?.is_active === true;
-  const isExpired = !isLifetime && !isTrialActive && !!org;
-  const trialDaysLeft = isTrialActive ? 30 : 0; // basic plan = 30 day rolling
+  const status = (org as any)?.license_status ?? "trial";
+  const expiresAt = (org as any)?.license_expires_at
+    ? new Date((org as any).license_expires_at)
+    : null;
+
+  const isLifetime = status === "lifetime";
+  const isActivePaid = status === "active";
+  const now = new Date();
+  const isTrial = status === "trial";
+  const trialNotExpired = isTrial && (!expiresAt || expiresAt > now);
+  const isExpired =
+    status === "expired" || (isTrial && expiresAt !== null && expiresAt <= now);
+
+  const trialDaysLeft =
+    isTrial && expiresAt
+      ? Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / 86_400_000))
+      : 0;
 
   return {
     profile,
-    orgId: tenantId,      // keep orgId alias so existing code doesn't break
-    tenantId,
-    org: org ? {
-      ...org,
-      name: org.name,
-      // map to fields products page expects
-      license_status: org.plan === "pro" ? "lifetime" : org.plan === "basic" ? "trial" : "expired",
-      license_expires_at: null,
-    } : null,
+    orgId,
+    tenantId: orgId, // back-compat alias
+    org: org
+      ? {
+          ...(org as any),
+          // expose a couple of compatibility fields used in older code
+          license_plan: status,
+          plan: status,
+          is_active: !isExpired,
+        }
+      : null,
     loading: profileLoading || orgLoading,
     isLifetime,
-    isTrialActive: isLifetime || isTrialActive, // pro = always active
-    isExpired: !org?.is_active,
+    isTrialActive: isLifetime || isActivePaid || trialNotExpired,
+    isExpired,
     trialDaysLeft,
-    role: profile?.role ?? "cashier",
+    role: (profile as any)?.role ?? "cashier",
   };
 }
