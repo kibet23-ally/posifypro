@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import LicenseManager from "@/components/admin/LicenseManager";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -12,13 +13,13 @@ import {
   Shield, UserCheck, CheckCircle2, XCircle, LogOut, Zap,
   RefreshCw, Search, X, ChevronRight, Bell, Settings,
   AlertTriangle,
-} from "lucide-react";
+} , Key } from "lucide-react";
 
 
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
-type AdminTab = "overview" | "tenants" | "analytics" | "staff" | "activity" | "settings";
+type AdminTab = "overview" | "tenants" | "analytics" | "staff" | "licenses" | "activity" | "settings";
 
 interface Tenant {
   id: string; name: string; slug: string; email: string;
@@ -52,6 +53,7 @@ const SIDEBAR_ITEMS = [
   { id: "tenants",    label: "Businesses",  icon: Building2       },
   { id: "analytics",  label: "Analytics",   icon: TrendingUp      },
   { id: "staff",      label: "All Staff",   icon: Users           },
+  { id: "licenses",   label: "Licenses",    icon: Key             },
   { id: "activity",   label: "Activity",    icon: Bell            },
   { id: "settings",   label: "Settings",    icon: Settings        },
 ] as const;
@@ -949,6 +951,14 @@ export default function SuperAdminDashboard() {
             </div>
           )}
 
+
+          {/* ════════════════════════════════
+              LICENSES
+          ════════════════════════════════ */}
+          {tab === "licenses" && (
+            <LicenseManager adminId={user?.id ?? ""} />
+          )}
+
           {/* ════════════════════════════════
               ACTIVITY
           ════════════════════════════════ */}
@@ -1035,15 +1045,9 @@ export default function SuperAdminDashboard() {
           )}
         </div>
 
-{/* Mobile bottom nav removed for SaaS drawer UI */}
-
       <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
-    </div>
     </div>
   );
 }
