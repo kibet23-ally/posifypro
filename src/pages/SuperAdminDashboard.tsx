@@ -202,14 +202,8 @@ export default function SuperAdminDashboard() {
         <div style={{flex:1,padding:"24px",overflowY:"auto"}}>
 
           {tab==="overview" && (
-            {sidebarOpen && <div onClick={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:40}} />}
-      {sidebar}
-      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column"}}>
-        {topbar}
-        <div style={{flex:1,padding:"24px",overflowY:"auto"}}>
-
-          {tab==="overview" && (
             <div style={{display:"flex",flexDirection:"column",gap:"22px"}}>
+
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:"12px"}}>
                 <KCard label="Total Businesses" value={String(kpi?.totalTenants??0)} icon={Building2} color="#6366f1" trend={kpi?.tenantGrowth} sub={`${kpi?.newThisMonth??0} new this month`} loading={loading} />
                 <KCard label="Active" value={String(kpi?.activeTenants??0)} icon={CheckCircle2} color="#10b981" sub={`${kpi&&kpi.totalTenants?Math.round((kpi.activeTenants/kpi.totalTenants)*100):0}% of total`} loading={loading} />
@@ -502,7 +496,7 @@ export default function SuperAdminDashboard() {
 
         </div>
       </div>
-      </div></div></div></div><style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
