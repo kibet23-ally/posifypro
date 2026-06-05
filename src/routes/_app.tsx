@@ -32,11 +32,11 @@ function AppLayout() {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("organizations(name)")
+      .select("tenants(name)")
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
-        const name = (data?.organizations as any)?.name;
+        const name = (data?.tenants as any)?.name;
         if (name) setBusinessName(name);
       });
   }, [user]);
