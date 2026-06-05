@@ -31,13 +31,12 @@ type Form = {
   category_name: string;
   emoji: string;
   barcode: string;
-  sku: string;
   low_stock_threshold: number;
 };
 
 const empty: Form = {
   name: "", price: 0, cost_price: 0, stock: 0,
-  category_name: "", emoji: "📦", barcode: "", sku: "", low_stock_threshold: 10,
+  category_name: "", emoji: "📦", barcode: "", low_stock_threshold: 10,
 };
 
 function ProductsPage() {
@@ -72,7 +71,7 @@ function ProductsPage() {
       const q = search.toLowerCase();
       const matchSearch = !q || p.name.toLowerCase().includes(q) ||
         (p.category_name ?? "").toLowerCase().includes(q) ||
-        (p.sku ?? "").toLowerCase().includes(q);
+        (p.barcode ?? "").toLowerCase().includes(q);
       const matchLow = !filterLowStock ||
         (p.stock ?? 0) <= (p.low_stock_threshold ?? 10);
       return matchSearch && matchLow;
@@ -98,7 +97,6 @@ function ProductsPage() {
         low_stock_threshold: form.low_stock_threshold || 10,
         category_name: form.category_name || null,
         emoji: form.emoji || "📦",
-        sku: form.sku || null,
         barcode: form.barcode || null,
         is_active: true,
         org_id: tenantId,

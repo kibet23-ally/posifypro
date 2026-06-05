@@ -127,12 +127,12 @@ function POS() {
     queryFn: async () => {
       const { data } = await supabase
         .from("products")
-        .select("*, categories(name, color)")
+        .select("*")
         .eq("org_id", tenantId!)
         .eq("is_active", true)
         .gt("stock", 0)
         .order("name");
-      return (data ?? []) as Product[];
+      return (data ?? []) as unknown as Product[];
     },
   });
 
@@ -206,8 +206,8 @@ function POS() {
           discount_amount: discountAmt,
           tax_amount: 0,
           total: total,
-          amount_paid: paymentMethod === "cash" ? paid : total,
-          change_amount: paymentMethod === "cash" ? change : 0,
+          cash_received: paymentMethod === "cash" ? paid : total,
+          change_given: paymentMethod === "cash" ? change : 0,
         })
         .select()
         .single();
@@ -216,14 +216,13 @@ function POS() {
 
       // Create order items
       const items = cart.map(i => ({
-        order_id: order.id,
+        sale_id: order.id,
         org_id: tenantId,
         product_id: i.product.id,
         product_name: i.product.name,
-        product_price: i.product.price,
+        unit_price: i.product.price,
         quantity: i.quantity,
-        discount: 0,
-        total: i.product.price * i.quantity,
+        subtotal: i.product.price * i.quantity,
       }));
 
       const { error: itemsErr } = await supabase.from("sale_items").insert(items);
