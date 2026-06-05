@@ -6,21 +6,18 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const queryClient = new QueryClient();
 
-export const router = createRouter({
-  routeTree,
-  context: {
-    queryClient,
-    auth: {
-      supabase,
+export const getRouter = () => {
+  const router = createRouter({
+    routeTree,
+    context: {
+      queryClient,
+      auth: {
+        supabase,
+      },
     },
-  },
-  scrollRestoration: true,
-  defaultPreloadStaleTime: 0,
-});
+    scrollRestoration: true,
+    defaultPreloadStaleTime: 0,
+  });
 
-// Important for TS
-declare module "@tanstack/react-router" {
-  interface Register {
-    router: typeof router;
-  }
-}
+  return router;
+};
