@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import LicenseGuard from "@/components/LicenseGuard";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
@@ -220,7 +221,9 @@ function AppLayout() {
 
         {/* ── PAGE CONTENT ── */}
         <main className="flex-1 overflow-auto">
-          <Outlet />
+          <LicenseGuard>
+            <Outlet />
+          </LicenseGuard>
         </main>
       </div>
     </div>
