@@ -31,7 +31,7 @@ function SalesPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("sales")
-        .select("*, profiles(name), sale_items(product_name, quantity, product_price, total)")
+        .select("*, sale_items(product_name, quantity, unit_price, subtotal)")
         .eq("org_id", tenantId!)
         .order("created_at", { ascending: false });
       return data ?? [];
@@ -51,7 +51,7 @@ function SalesPage() {
     const q = search.toLowerCase();
     const matchSearch = !q ||
       o.receipt_number?.toLowerCase().includes(q) ||
-      (o.profiles as any)?.name?.toLowerCase().includes(q);
+      (o as any).cashier_name?.toLowerCase().includes(q);
     const matchMethod = filterMethod === "all" || o.payment_method === filterMethod;
     return matchSearch && matchMethod;
   });
@@ -148,7 +148,7 @@ function SalesPage() {
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {(order.profiles as any)?.name ?? "Walk-in"} ·{" "}
+                      {(order as any).cashier_name ?? (order as any).customer_name ?? "Walk-in"} ·{" "}
                       {new Date(order.created_at).toLocaleDateString("en-KE", {
                         day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
                       })}

@@ -46,7 +46,7 @@ function Dashboard() {
       const { data: profile } = await supabase
         .from("profiles").select("org_id, organizations(name)").eq("id", user!.id).single();
       const tid = profile?.org_id;
-      const businessName = (profile?.tenants as any)?.name ?? null;
+      const businessName = (profile?.organizations as any)?.name ?? null;
 
       const now = new Date();
       const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
@@ -65,7 +65,7 @@ function Dashboard() {
           supabase.from("products").select("*", { count: "exact", head: true }).eq("org_id", tid).eq("is_active", true),
           supabase.from("customers").select("*", { count: "exact", head: true }).eq("org_id", tid),
           supabase.from("products").select("id, name, stock, emoji").eq("org_id", tid).eq("is_active", true).lte("stock", 10).order("stock").limit(6),
-          supabase.from("sales").select("id, receipt_number, total, payment_method, created_at, profiles(name)").eq("org_id", tid).order("created_at", { ascending: false }).limit(8),
+          supabase.from("sales").select("id, receipt_number, total, payment_method, created_at, cashier_name, customer_name").eq("org_id", tid).order("created_at", { ascending: false }).limit(8),
         ]);
 
       const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
@@ -310,7 +310,7 @@ function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold">{r.receipt_number}</div>
                     <div className="text-xs text-muted-foreground">
-                      {(r.profiles as any)?.name ?? "Walk-in"} ·{" "}
+                      {(r as any).cashier_name ?? (r as any).customer_name ?? "Walk-in"} ·{" "}
                       <span className="capitalize">{r.payment_method}</span>
                     </div>
                   </div>
