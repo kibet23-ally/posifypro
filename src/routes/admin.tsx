@@ -1,6 +1,5 @@
-// src/routes/admin.tsx
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import SuperAdminDashboard from '@/pages/SuperAdminDashboard'
+import AdminDashboard from '@/pages/AdminDashboard'
 import { supabase } from '@/lib/supabase'
 
 export const Route = createFileRoute('/admin')({
@@ -17,9 +16,18 @@ export const Route = createFileRoute('/admin')({
       .eq('id', session.user.id)
       .single()
 
-    if (!profile || profile.role !== 'super_admin') {
+    if (!profile) {
+      throw redirect({ to: '/login' })
+    }
+
+    if (profile.role === 'super_admin') {
+      throw redirect({ to: '/super-admin' })
+    }
+
+    if (profile.role !== 'admin') {
       throw redirect({ to: '/dashboard' })
     }
   },
-  component: SuperAdminDashboard,
+
+  component: AdminDashboard,
 })
