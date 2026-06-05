@@ -266,7 +266,7 @@ export default function PricingPage() {
                 </div>
 
                 {/* CTA */}
-                <a href="https://wa.me/254700000000?text=Hi%2C%20I%20want%20to%20buy%20a%20PosifyPro%20" + plan.name + "%20license"
+                <a href={`https://wa.me/254700000000?text=Hi%2C%20I%20want%20to%20buy%20a%20PosifyPro%20${plan.name}%20license`}
                   target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
                   <button style={{
                     width: "100%", padding: "12px", borderRadius: "10px", border: "none",
