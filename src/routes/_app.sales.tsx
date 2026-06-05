@@ -129,7 +129,7 @@ function SalesPage() {
       ) : (
         <div className="space-y-2">
           {paginated.map(order => {
-            const statusCfg = STATUS_CFG[order.status] ?? STATUS_CFG.pending;
+            const statusCfg = STATUS_CFG[order.status ?? "pending"] ?? STATUS_CFG.pending;
             const isOpen = expanded === order.id;
             const items = (order.sale_items as any[]) ?? [];
             return (
@@ -139,7 +139,7 @@ function SalesPage() {
                   className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
                   onClick={() => setExpanded(isOpen ? null : order.id)}
                 >
-                  <div className="text-2xl shrink-0">{METHOD_ICON[order.payment_method] ?? "🧾"}</div>
+                  <div className="text-2xl shrink-0">{METHOD_ICON[order.payment_method ?? "other"] ?? "🧾"}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-sm">{order.receipt_number}</span>
