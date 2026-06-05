@@ -30,9 +30,9 @@ function SalesPage() {
     enabled: !!tenantId,
     queryFn: async () => {
       const { data } = await supabase
-        .from("orders")
-        .select("*, profiles(full_name), order_items(product_name, quantity, product_price, total)")
-        .eq("tenant_id", tenantId!)
+        .from("sales")
+        .select("*, sale_items(product_name, quantity, unit_price, subtotal)")
+        .eq("org_id", tenantId!)
         .order("created_at", { ascending: false });
       return data ?? [];
     },
@@ -41,17 +41,17 @@ function SalesPage() {
   // Summary stats
   const totalRevenue = orders
     .filter(o => o.status === "completed")
-    .reduce((s, o) => s + Number(o.total_amount), 0);
+    .reduce((s, o) => s + Number(o.total), 0);
   const todayRevenue = orders
-    .filter(o => o.status === "completed" &&
+    .filter(o => o.status === "completed" && o.created_at &&
       new Date(o.created_at).toDateString() === new Date().toDateString())
-    .reduce((s, o) => s + Number(o.total_amount), 0);
+    .reduce((s, o) => s + Number(o.total), 0);
 
   const filtered = orders.filter(o => {
     const q = search.toLowerCase();
     const matchSearch = !q ||
-      o.order_number?.toLowerCase().includes(q) ||
-      (o.profiles as any)?.full_name?.toLowerCase().includes(q);
+      o.receipt_number?.toLowerCase().includes(q) ||
+      (o as any).cashier_name?.toLowerCase().includes(q);
     const matchMethod = filterMethod === "all" || o.payment_method === filterMethod;
     return matchSearch && matchMethod;
   });
@@ -129,9 +129,9 @@ function SalesPage() {
       ) : (
         <div className="space-y-2">
           {paginated.map(order => {
-            const statusCfg = STATUS_CFG[order.status] ?? STATUS_CFG.pending;
+            const statusCfg = STATUS_CFG[order.status ?? "pending"] ?? STATUS_CFG.pending;
             const isOpen = expanded === order.id;
-            const items = (order.order_items as any[]) ?? [];
+            const items = (order.sale_items as any[]) ?? [];
             return (
               <Card key={order.id} className="overflow-hidden">
                 {/* Order row */}
@@ -139,24 +139,24 @@ function SalesPage() {
                   className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
                   onClick={() => setExpanded(isOpen ? null : order.id)}
                 >
-                  <div className="text-2xl shrink-0">{METHOD_ICON[order.payment_method] ?? "🧾"}</div>
+                  <div className="text-2xl shrink-0">{METHOD_ICON[order.payment_method ?? "other"] ?? "🧾"}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{order.order_number}</span>
+                      <span className="font-semibold text-sm">{order.receipt_number}</span>
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusCfg.color}`}>
                         {statusCfg.label}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {(order.profiles as any)?.full_name ?? "Walk-in"} ·{" "}
-                      {new Date(order.created_at).toLocaleDateString("en-KE", {
+                      {(order as any).cashier_name ?? (order as any).customer_name ?? "Walk-in"} ·{" "}
+                      {order.created_at && new Date(order.created_at).toLocaleDateString("en-KE", {
                         day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
                       })}
                       {" · "}{items.length} item{items.length !== 1 ? "s" : ""}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-bold">{fmtMoney(Number(order.total_amount))}</div>
+                    <div className="font-bold">{fmtMoney(Number(order.total))}</div>
                     <div className="text-xs text-muted-foreground capitalize">{order.payment_method}</div>
                   </div>
                   {isOpen
@@ -191,18 +191,18 @@ function SalesPage() {
                       )}
                       <div className="flex justify-between font-bold text-base">
                         <span>Total</span>
-                        <span>{fmtMoney(Number(order.total_amount))}</span>
+                        <span>{fmtMoney(Number(order.total))}</span>
                       </div>
                       {order.payment_method === "cash" && (
                         <>
                           <div className="flex justify-between text-muted-foreground">
                             <span>Amount paid</span>
-                            <span>{fmtMoney(Number(order.amount_paid))}</span>
+                            <span>{fmtMoney(Number(order.cash_received))}</span>
                           </div>
-                          {Number(order.change_amount) > 0 && (
+                          {Number(order.change_given) > 0 && (
                             <div className="flex justify-between text-blue-600">
                               <span>Change</span>
-                              <span>{fmtMoney(Number(order.change_amount))}</span>
+                              <span>{fmtMoney(Number(order.change_given))}</span>
                             </div>
                           )}
                         </>

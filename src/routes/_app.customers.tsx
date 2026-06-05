@@ -20,11 +20,11 @@ export const Route = createFileRoute("/_app/customers")({ component: CustomersPa
 
 type Form = {
   id?: string;
-  full_name: string;
+  name: string;
   email: string;
   phone: string;
 };
-const empty: Form = { full_name: "", email: "", phone: "" };
+const empty: Form = { name: "", email: "", phone: "" };
 
 function CustomersPage() {
   const qc = useQueryClient();
@@ -41,28 +41,28 @@ function CustomersPage() {
       (await supabase
         .from("customers")
         .select("*")
-        .eq("tenant_id", tenantId!)
-        .order("full_name")
+        .eq("org_id", tenantId!)
+        .order("name")
       ).data ?? [],
   });
 
   const filtered = customers.filter(c => {
     const q = search.toLowerCase();
-    return !q || c.full_name?.toLowerCase().includes(q) ||
+    return !q || c.name?.toLowerCase().includes(q) ||
       c.email?.toLowerCase().includes(q) ||
       c.phone?.toLowerCase().includes(q);
   });
 
   const save = async () => {
-    if (!form.full_name.trim()) { toast.error("Customer name is required"); return; }
+    if (!form.name.trim()) { toast.error("Customer name is required"); return; }
     if (!tenantId) { toast.error("No business found"); return; }
     setSaving(true);
     try {
       const payload = {
-        full_name: form.full_name.trim(),
+        name: form.name.trim(),
         email: form.email || null,
         phone: form.phone || null,
-        tenant_id: tenantId,
+        org_id: tenantId,
       };
       const { error } = form.id
         ? await supabase.from("customers").update(payload).eq("id", form.id)
@@ -113,8 +113,8 @@ function CustomersPage() {
             <div className="space-y-3 py-2">
               <div className="space-y-1.5">
                 <Label>Full Name *</Label>
-                <Input value={form.full_name}
-                  onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                <Input value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Jane Wanjiru" />
               </div>
               <div className="space-y-1.5">
@@ -146,9 +146,9 @@ function CustomersPage() {
           {topCustomers.map((c, i) => (
             <Card key={c.id} className="p-4 text-center">
               <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm mx-auto mb-2">
-                {c.full_name?.charAt(0)?.toUpperCase()}
+                {c.name?.charAt(0)?.toUpperCase()}
               </div>
-              <div className="font-semibold text-sm truncate">{c.full_name}</div>
+              <div className="font-semibold text-sm truncate">{c.name}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{fmtMoney(Number(c.total_spent ?? 0))} spent</div>
               {i === 0 && <Star className="size-3 text-amber-400 mx-auto mt-1" />}
             </Card>
@@ -179,10 +179,10 @@ function CustomersPage() {
           {filtered.map(c => (
             <Card key={c.id} className="p-4 flex items-center gap-3">
               <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary shrink-0">
-                {c.full_name?.charAt(0)?.toUpperCase() ?? "?"}
+                {c.name?.charAt(0)?.toUpperCase() ?? "?"}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm">{c.full_name}</div>
+                <div className="font-semibold text-sm">{c.name}</div>
                 <div className="flex flex-wrap gap-2 mt-0.5">
                   {c.phone && (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -204,7 +204,7 @@ function CustomersPage() {
               </div>
               <div className="flex gap-0.5 shrink-0">
                 <Button size="icon" variant="ghost"
-                  onClick={() => { setForm({ id: c.id, full_name: c.full_name, email: c.email ?? "", phone: c.phone ?? "" }); setOpen(true); }}>
+                  onClick={() => { setForm({ id: c.id, name: c.name, email: c.email ?? "", phone: c.phone ?? "" }); setOpen(true); }}>
                   <Pencil className="size-4" />
                 </Button>
                 <Button size="icon" variant="ghost"

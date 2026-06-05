@@ -82,7 +82,7 @@ export default function PricingPage() {
   const [activating, setActivating] = useState(false);
   const [activated, setActivated] = useState(false);
 
-  const currentPlan = org?.license_plan ?? org?.plan ?? "trial";
+  const currentPlan = (org as any)?.license_plan ?? (org as any)?.license_status ?? "trial";
 
   const activateLicense = async () => {
     if (!licenseKey.trim()) { toast.error("Enter your license key"); return; }
@@ -90,19 +90,9 @@ export default function PricingPage() {
 
     setActivating(true);
     try {
-      const { data, error } = await supabase.rpc("activate_license", {
-        p_key: licenseKey.trim().toUpperCase(),
-        p_tenant_id: tenantId,
-      });
-
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-
-      setActivated(true);
-      toast.success(`🎉 ${data.message}`);
-
-      // Reload after 2s to reflect new plan
-      setTimeout(() => navigate({ to: "/dashboard" }), 2000);
+      // License activation isn't wired to the current schema yet.
+      // Reach out to support to upgrade your plan.
+      throw new Error("License activation is coming soon — please contact support to upgrade.");
     } catch (err: any) {
       toast.error(err.message ?? "Activation failed");
     } finally {

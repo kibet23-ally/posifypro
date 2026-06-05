@@ -1,16 +1,15 @@
 // src/contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { supabase, type AuthUser, type Profile, type Tenant } from '@/lib/supabase'
+import { supabase, type AuthUser, type Profile, type Organization } from '@/lib/supabase'
 import { Session } from '@supabase/supabase-js'
 
-// -------------------------------------------------------
-// Context Types
-// -------------------------------------------------------
 interface AuthContextType {
   session: Session | null
   authUser: AuthUser | null
   profile: Profile | null
-  tenant: Tenant | null
+  org: Organization | null
+  /** @deprecated use `org` */
+  tenant: Organization | null
   isLoading: boolean
   isOwner: boolean
   isManager: boolean
@@ -25,69 +24,60 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// -------------------------------------------------------
-// Auth Provider
-// -------------------------------------------------------
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [tenant, setTenant] = useState<Tenant | null>(null)
+  const [org, setOrg] = useState<Organization | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const fetchProfileAndTenant = async (userId: string) => {
-    // Fetch user profile
-    const { data: profileData, error: profileError } = await supabase
+  const fetchProfileAndOrg = async (userId: string) => {
+    const { data: profileData } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
 
-    if (profileError || !profileData) {
+    if (!profileData) {
       setProfile(null)
-      setTenant(null)
+      setOrg(null)
       return
     }
+    setProfile(profileData as unknown as Profile)
 
-    setProfile(profileData)
-
-    // Fetch tenant
-    if (profileData.tenant_id) {
-      const { data: tenantData } = await supabase
-        .from('tenants')
+    if (profileData.org_id) {
+      const { data: orgData } = await supabase
+        .from('organizations')
         .select('*')
-        .eq('id', profileData.tenant_id)
-        .single()
-
-      setTenant(tenantData ?? null)
+        .eq('id', profileData.org_id)
+        .maybeSingle()
+      setOrg((orgData as unknown as Organization) ?? null)
+    } else {
+      setOrg(null)
     }
   }
 
   const refreshProfile = async () => {
-    if (session?.user?.id) {
-      await fetchProfileAndTenant(session.user.id)
-    }
+    if (session?.user?.id) await fetchProfileAndOrg(session.user.id)
   }
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session?.user) {
-        fetchProfileAndTenant(session.user.id).finally(() => setIsLoading(false))
+        fetchProfileAndOrg(session.user.id).finally(() => setIsLoading(false))
       } else {
         setIsLoading(false)
       }
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setSession(session)
         if (session?.user) {
-          await fetchProfileAndTenant(session.user.id)
+          await fetchProfileAndOrg(session.user.id)
         } else {
           setProfile(null)
-          setTenant(null)
+          setOrg(null)
         }
         setIsLoading(false)
       }
@@ -99,51 +89,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut()
     setProfile(null)
-    setTenant(null)
+    setOrg(null)
   }
 
-  // -------------------------------------------------------
-  // Role helpers — use these throughout the app
-  // -------------------------------------------------------
   const role = profile?.role
   const isSuperAdmin = role === 'super_admin'
   const isOwner = role === 'owner'
   const isManager = role === 'manager'
   const isCashier = role === 'cashier'
 
-  // Permission groups
   const canManageStaff = isSuperAdmin || isOwner
   const canManageProducts = isSuperAdmin || isOwner || isManager
   const canViewReports = isSuperAdmin || isOwner || isManager
 
-  const authUser: AuthUser | null =
-    profile && tenant ? { profile, tenant } : null
+  const authUser: AuthUser | null = profile && org ? { profile, org } : null
 
   return (
     <AuthContext.Provider value={{
-      session,
-      authUser,
-      profile,
-      tenant,
-      isLoading,
-      isOwner,
-      isManager,
-      isCashier,
-      isSuperAdmin,
-      canManageStaff,
-      canManageProducts,
-      canViewReports,
-      signOut,
-      refreshProfile,
+      session, authUser, profile, org, tenant: org, isLoading,
+      isOwner, isManager, isCashier, isSuperAdmin,
+      canManageStaff, canManageProducts, canViewReports,
+      signOut, refreshProfile,
     }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-// -------------------------------------------------------
-// Hook
-// -------------------------------------------------------
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) throw new Error('useAuth must be used within AuthProvider')

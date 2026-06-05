@@ -1,40 +1,32 @@
 // src/lib/supabase.ts
-import { createClient } from '@supabase/supabase-js'
+// Re-export the shared Supabase client + domain types matching the actual schema.
+export { supabase } from '@/integrations/supabase/client'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-
-export const supabase = createClient(supabaseUrl, supabaseKey)
-
-// -------------------------------------------------------
-// Types
-// -------------------------------------------------------
 export type UserRole = 'super_admin' | 'owner' | 'manager' | 'cashier'
 
-export interface Tenant {
+export interface Organization {
   id: string
   name: string
-  slug: string
-  email: string
-  phone?: string
-  logo_url?: string
-  currency: string
-  timezone: string
-  plan: 'free' | 'basic' | 'pro'
-  is_active: boolean
+  owner_id: string
+  license_status: 'trial' | 'active' | 'lifetime' | 'expired' | string
+  license_expires_at: string | null
+  purchased_at: string | null
 }
+
+// Back-compat alias for files still importing { Tenant }
+export type Tenant = Organization
 
 export interface Profile {
   id: string
-  tenant_id: string
-  full_name: string
-  email: string
+  org_id: string | null
+  name: string | null
+  email: string | null
   role: UserRole
-  avatar_url?: string
+  avatar: string | null
   is_active: boolean
 }
 
 export interface AuthUser {
   profile: Profile
-  tenant: Tenant
+  org: Organization
 }
