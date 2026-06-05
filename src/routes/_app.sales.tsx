@@ -43,7 +43,7 @@ function SalesPage() {
     .filter(o => o.status === "completed")
     .reduce((s, o) => s + Number(o.total), 0);
   const todayRevenue = orders
-    .filter(o => o.status === "completed" &&
+    .filter(o => o.status === "completed" && o.created_at &&
       new Date(o.created_at).toDateString() === new Date().toDateString())
     .reduce((s, o) => s + Number(o.total), 0);
 
@@ -149,7 +149,7 @@ function SalesPage() {
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {(order as any).cashier_name ?? (order as any).customer_name ?? "Walk-in"} ·{" "}
-                      {new Date(order.created_at).toLocaleDateString("en-KE", {
+                      {order.created_at && new Date(order.created_at).toLocaleDateString("en-KE", {
                         day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
                       })}
                       {" · "}{items.length} item{items.length !== 1 ? "s" : ""}
@@ -197,12 +197,12 @@ function SalesPage() {
                         <>
                           <div className="flex justify-between text-muted-foreground">
                             <span>Amount paid</span>
-                            <span>{fmtMoney(Number(order.amount_paid))}</span>
+                            <span>{fmtMoney(Number(order.cash_received))}</span>
                           </div>
-                          {Number(order.change_amount) > 0 && (
+                          {Number(order.change_given) > 0 && (
                             <div className="flex justify-between text-blue-600">
                               <span>Change</span>
-                              <span>{fmtMoney(Number(order.change_amount))}</span>
+                              <span>{fmtMoney(Number(order.change_given))}</span>
                             </div>
                           )}
                         </>

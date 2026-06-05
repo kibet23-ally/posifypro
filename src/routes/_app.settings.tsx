@@ -59,13 +59,10 @@ function SettingsPage() {
       const { error } = await supabase.from("organizations")
         .update({
           name:     biz.name.trim(),
-          email:    biz.email || null,
-          phone:    biz.phone || null,
-          address:  biz.address || null,
-          currency: biz.currency,
-          timezone: biz.timezone,
         })
         .eq("id", tenantId);
+      // Other business details (email/phone/address/currency/timezone) live in
+      // the `settings` table and can be wired up in a follow-up.
       if (error) throw error;
       toast.success("Business settings saved!");
       qc.invalidateQueries({ queryKey: ["tenant"] });

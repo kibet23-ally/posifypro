@@ -141,7 +141,6 @@ function ProductsPage() {
       category_name: p.category_name ?? "",
       emoji: p.emoji ?? "📦",
       barcode: p.barcode ?? "",
-      sku: p.sku ?? "",
       low_stock_threshold: p.low_stock_threshold ?? 10,
     });
     setOpen(true);
@@ -213,15 +212,12 @@ function ProductsPage() {
                 <Input type="number" min="0" value={form.low_stock_threshold || ""} onChange={f("low_stock_threshold")} placeholder="10" />
               </div>
 
-              {/* SKU + Barcode */}
-              <div className="space-y-1.5">
-                <Label>SKU</Label>
-                <Input value={form.sku} onChange={f("sku")} placeholder="Optional" />
-              </div>
+              {/* Barcode */}
               <div className="space-y-1.5">
                 <Label>Barcode</Label>
                 <Input value={form.barcode} onChange={f("barcode")} placeholder="Optional" />
               </div>
+
 
               {/* Profit margin preview */}
               {form.price > 0 && form.cost_price > 0 && (
@@ -296,8 +292,8 @@ function ProductsPage() {
           <div className="grid grid-cols-2 gap-3 md:hidden">
             {filtered.map(p => {
               const isLow = (p.stock ?? 0) <= (p.low_stock_threshold ?? 10);
-              const margin = p.price > 0 && p.cost_price > 0
-                ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null;
+              const margin = p.price > 0 && (p.cost_price ?? 0) > 0
+                ? Math.round(((p.price - (p.cost_price ?? 0)) / p.price) * 100) : null;
               return (
                 <Card key={p.id} className={`p-3 relative ${isLow ? "border-amber-200" : ""}`}>
                   {isLow && (
@@ -348,8 +344,8 @@ function ProductsPage() {
               <tbody>
                 {filtered.map(p => {
                   const isLow = (p.stock ?? 0) <= (p.low_stock_threshold ?? 10);
-                  const margin = p.price > 0 && p.cost_price > 0
-                    ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null;
+                  const margin = p.price > 0 && (p.cost_price ?? 0) > 0
+                    ? Math.round(((p.price - (p.cost_price ?? 0)) / p.price) * 100) : null;
                   return (
                     <tr key={p.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                       <td className="p-3 pl-4">
@@ -357,7 +353,7 @@ function ProductsPage() {
                           <span className="text-xl shrink-0">{p.emoji ?? "📦"}</span>
                           <div>
                             <div className="font-medium">{p.name}</div>
-                            {p.sku && <div className="text-xs text-muted-foreground">SKU: {p.sku}</div>}
+                            {p.barcode && <div className="text-xs text-muted-foreground">#{p.barcode}</div>}
                           </div>
                         </div>
                       </td>

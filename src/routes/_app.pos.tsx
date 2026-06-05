@@ -59,7 +59,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
             </div>
           ))}
         </div>
-        <div style={{ fontSize: "13px", space: "4px" }}>
+        <div style={{ fontSize: "13px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
             <span style={{ color: "#6b7280" }}>Subtotal</span>
             <span>{fmtMoney(order.subtotal)}</span>
