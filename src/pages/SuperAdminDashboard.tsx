@@ -13,7 +13,8 @@ import {
   Shield, UserCheck, CheckCircle2, XCircle, LogOut, Zap,
   RefreshCw, Search, X, ChevronRight, Bell, Settings,
   AlertTriangle,
-} , Key } from "lucide-react";
+  Key,
+} from "lucide-react";
 
 
 // ─────────────────────────────────────────────
@@ -481,7 +482,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Page content */}
-        <div style={{ flex: 1, padding: "24px", overflowY: "auto", paddingBottom: isMobile ? "80px" : "24px" }}>
+        <div style={{ flex: 1, padding: "24px", overflowY: "auto", paddingBottom: "24px" }}>
 
           {/* ════════════════════════════════
               OVERVIEW
@@ -737,7 +738,7 @@ export default function SuperAdminDashboard() {
                   </div>
 
                   {/* Quick stats — no revenue */}
-            <div style={{ display: "flex", gap: "12px", marginBottom: "18px", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: "12px", marginBottom: "18px", flexWrap: "wrap" }}>
                     {[
                       { label: "Staff",    value: selectedTenant.staff_count, icon: "👥" },
                       { label: "Orders",   value: selectedTenant.order_count, icon: "🧾" },
