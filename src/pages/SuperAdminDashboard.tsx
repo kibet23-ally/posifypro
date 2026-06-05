@@ -1,12 +1,11 @@
-// src/pages/SuperAdminDashboard.tsx
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import LicenseManager from "@/components/admin/LicenseManager";
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
 import {
   LayoutDashboard, Building2, TrendingUp, Users, Crown,
@@ -18,20 +17,35 @@ import {
 type AdminTab = "overview" | "tenants" | "analytics" | "staff" | "licenses" | "activity" | "settings";
 
 interface Tenant {
-  id: string; name: string; slug: string; email: string;
-  phone?: string; plan: "free" | "basic" | "pro";
-  is_active: boolean; created_at: string; currency: string;
-  staff_count?: number; order_count?: number;
+  id: string;
+  name: string;
+  slug: string;
+  email: string;
+  phone?: string;
+  plan: "free" | "basic" | "pro";
+  is_active: boolean;
+  created_at: string;
+  currency: string;
+  staff_count?: number;
+  order_count?: number;
 }
 
 interface KPI {
-  totalTenants: number; activeTenants: number; newThisMonth: number;
-  suspendedTenants: number; totalStaff: number;
-  proTenants: number; basicTenants: number; freeTenants: number;
+  totalTenants: number;
+  activeTenants: number;
+  newThisMonth: number;
+  suspendedTenants: number;
+  totalStaff: number;
+  proTenants: number;
+  basicTenants: number;
+  freeTenants: number;
   tenantGrowth: number;
 }
 
-interface GrowthPoint { month: string; tenants: number; }
+interface GrowthPoint {
+  month: string;
+  tenants: number;
+}
 
 // ── Constants ──────────────────────────────────────────────
 const PLAN_CFG = {
@@ -66,8 +80,13 @@ const fmtShort = (n: number) =>
 
 // ── KPI Card ───────────────────────────────────────────────
 function KPICard({ label, value, sub, icon: Icon, trend, color, loading }: {
-  label: string; value: string; sub?: string;
-  icon: any; trend?: number; color: string; loading?: boolean;
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ComponentType<any>;
+  trend?: number;
+  color: string;
+  loading?: boolean;
 }) {
   const up = (trend ?? 0) >= 0;
   return (
@@ -126,7 +145,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ── Main Component ─────────────────────────────────────────
 export default function SuperAdminDashboard() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<AdminTab>("overview");
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -139,8 +158,6 @@ export default function SuperAdminDashboard() {
   const [staffSearch, setStaffSearch] = useState("");
   const [filterPlan, setFilterPlan] = useState<"all"|"free"|"basic"|"pro">("all");
   const [filterStatus, setFilterStatus] = useState<"all"|"active"|"suspended">("all");
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sortBy, setSortBy] = useState<"newest"|"staff"|"orders">("newest");
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
@@ -154,18 +171,24 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     if (!user) return;
     supabase.from("profiles").select("role").eq("id", user.id).single()
-      .then(({ data }) => { if (data?.role !== "super_admin") navigate({ to: "/dashboard" }); });
+      .then(({ data }) => {
+        if (data?.role !== "super_admin") navigate({ to: "/dashboard" });
+      });
   }, [user, navigate]);
 
   const fetchData = useCallback(async () => {
     setRefreshing(true);
     try {
       const { data: tenantsRaw } = await supabase
-        .from("tenants").select("*").neq("slug", "posifypro").order("created_at", { ascending: false });
+        .from("tenants")
+        .select("*")
+        .neq("slug", "posifypro")
+        .order("created_at", { ascending: false });
+
       if (!tenantsRaw) return;
 
       const enriched: Tenant[] = await Promise.all(
-        tenantsRaw.map(async t => {
+        tenantsRaw.map(async (t: any) => {
           const [staffRes, orderRes] = await Promise.all([
             supabase.from("profiles").select("id", { count: "exact", head: true }).eq("tenant_id", t.id),
             supabase.from("orders").select("id", { count: "exact", head: true }).eq("tenant_id", t.id),
@@ -176,14 +199,20 @@ export default function SuperAdminDashboard() {
       setTenants(enriched);
 
       const { data: staffData } = await supabase
-        .from("profiles").select("*, tenants(name)").neq("role", "super_admin").order("created_at", { ascending: false });
+        .from("profiles")
+        .select("*, tenants(name)")
+        .neq("role", "super_admin")
+        .order("created_at", { ascending: false });
       setAllStaff(staffData ?? []);
 
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const newThisMonth = enriched.filter(t => new Date(t.created_at) >= monthStart).length;
-      const newLastMonth = enriched.filter(t => { const d = new Date(t.created_at); return d >= lastMonthStart && d < monthStart; }).length;
+      const newThisMonth = enriched.filter((t: Tenant) => new Date(t.created_at) >= monthStart).length;
+      const newLastMonth = enriched.filter((t: Tenant) => {
+        const d = new Date(t.created_at);
+        return d >= lastMonthStart && d < monthStart;
+      }).length;
 
       setKpi({
         totalTenants: enriched.length,
@@ -194,44 +223,30 @@ export default function SuperAdminDashboard() {
         proTenants: enriched.filter(t => t.plan === "pro").length,
         basicTenants: enriched.filter(t => t.plan === "basic").length,
         freeTenants: enriched.filter(t => t.plan === "free").length,
-        tenantGrowth: newLastMonth > 0 ? Math.round(((newThisMonth - newLastMonth) / newLastMonth) * 100) : newThisMonth > 0 ? 100 : 0,
+        tenantGrowth: newLastMonth > 0 ? Math.round(((newThisMonth - newLastMonth) / newLastMonth) * 100) : (newThisMonth > 0 ? 100 : 0),
       });
 
       const growth: GrowthPoint[] = Array.from({ length: 6 }, (_, i) => {
-        const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
+        const d = new Date();
+        d.setMonth(d.getMonth() - (5 - i));
         const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-        return { month: MONTHS[d.getMonth()], tenants: enriched.filter(t => new Date(t.created_at) <= mEnd).length };
+        return {
+          month: MONTHS[d.getMonth()],
+          tenants: enriched.filter((t: Tenant) => new Date(t.created_at) <= mEnd).length,
+        };
       });
       setGrowthData(growth);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const toggleStatus = async (t: Tenant) => {
-    setActionLoading(true);
-    await supabase.from("tenants").update({ is_active: !t.is_active }).eq("id", t.id);
-    await fetchData();
-    setSelectedTenant(prev => prev ? { ...prev, is_active: !t.is_active } : null);
-    setActionLoading(false);
-  };
-
-  const changePlan = async (t: Tenant, plan: "free"|"basic"|"pro") => {
-    setActionLoading(true);
-    await supabase.from("tenants").update({ plan }).eq("id", t.id);
-    await supabase.from("subscriptions").update({ plan }).eq("tenant_id", t.id);
-    await fetchData();
-    setSelectedTenant(prev => prev ? { ...prev, plan } : null);
-    setActionLoading(false);
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/login" });
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const filtered = tenants
     .filter(t => {
@@ -264,51 +279,72 @@ export default function SuperAdminDashboard() {
     <div style={{ display: "flex", minHeight: "100vh", background: "#f8fafc", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       {/* Overlay */}
       {sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }} />
+        <div 
+          onClick={() => setSidebarOpen(false)} 
+          style={{ 
+            position: "fixed", 
+            inset: 0, 
+            background: "rgba(0,0,0,0.4)", 
+            zIndex: 40 
+          }} 
+        />
       )}
 
       {/* Sidebar */}
       <aside style={{
-        width: `${sidebarW}px`, background: "#0f172a", display: "flex",
-        flexDirection: "column", flexShrink: 0, height: "100vh",
+        width: `${sidebarW}px`,
+        background: "#0f172a",
+        display: "flex",
+        flexDirection: "column",
+        flexShrink: 0,
+        height: "100vh",
         ...(isMobile ? {
-          position: "fixed" as any, left: sidebarOpen ? 0 : `-${sidebarW}px`,
-          top: 0, zIndex: 50, transition: "left 0.25s ease",
-        } : { position: "sticky" as any, top: 0 }),
+          position: "fixed" as const,
+          left: sidebarOpen ? 0 : `-${sidebarW}px`,
+          top: 0,
+          zIndex: 50,
+          transition: "left 0.25s ease",
+        } : { 
+          position: "sticky" as const, 
+          top: 0 
+        }),
       }}>
-        {/* Logo + Mobile Close */}
+        {/* Logo */}
         <div style={{ padding: "20px 20px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-              <div style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius: "8px", padding: "6px 8px" }}>
-                <Zap style={{ width: "15px", height: "15px", color: "#fff" }} />
-              </div>
-              <span style={{ color: "#fff", fontWeight: "800", fontSize: "15px" }}>PosifyPro</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+            <div style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius: "8px", padding: "6px 8px" }}>
+              <Zap style={{ width: "15px", height: "15px", color: "#fff" }} />
             </div>
-            {isMobile && (
-              <button onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>
-                <X size={20} />
-              </button>
-            )}
+            <span style={{ color: "#fff", fontWeight: "800", fontSize: "15px" }}>PosifyPro</span>
           </div>
         </div>
 
         {/* Navigation */}
         <nav style={{ flex: 1, padding: "12px" }}>
-          {SIDEBAR_ITEMS.map(item => {
+          {SIDEBAR_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = tab === item.id;
             return (
               <button
                 key={item.id}
-                onClick={() => { setTab(item.id); if (isMobile) setSidebarOpen(false); }}
+                onClick={() => { 
+                  setTab(item.id); 
+                  if (isMobile) setSidebarOpen(false); 
+                }}
                 style={{
-                  width: "100%", padding: "12px 16px", borderRadius: "10px",
+                  width: "100%", 
+                  padding: "12px 16px", 
+                  borderRadius: "10px",
                   background: isActive ? "rgba(255,255,255,0.1)" : "transparent",
                   color: isActive ? "#fff" : "#94a3b8",
-                  display: "flex", alignItems: "center", gap: "12px",
-                  marginBottom: "4px", fontWeight: isActive ? "600" : "500",
-                  border: "none", cursor: "pointer", textAlign: "left",
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "12px",
+                  marginBottom: "4px", 
+                  fontWeight: isActive ? "600" : "500",
+                  border: "none", 
+                  cursor: "pointer", 
+                  textAlign: "left",
                 }}
               >
                 <Icon size={18} />
@@ -320,8 +356,20 @@ export default function SuperAdminDashboard() {
 
         <div style={{ padding: "16px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
           <button
-            onClick={handleSignOut}
-            style={{ width: "100%", padding: "10px", borderRadius: "8px", background: "rgba(255,255,255,0.08)", color: "#f87171", border: "none", cursor: "pointer", fontSize: "14px" }}
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate({ to: "/login" });
+            }}
+            style={{ 
+              width: "100%", 
+              padding: "10px", 
+              borderRadius: "8px", 
+              background: "rgba(255,255,255,0.08)", 
+              color: "#f87171", 
+              border: "none", 
+              cursor: "pointer", 
+              fontSize: "14px" 
+            }}
           >
             Sign Out
           </button>
@@ -331,21 +379,51 @@ export default function SuperAdminDashboard() {
       {/* Main Content */}
       <div style={{ flex: 1, marginLeft: isMobile ? 0 : `${sidebarW}px` }}>
         {/* Top Header */}
-        <header style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <header style={{ 
+          background: "#fff", 
+          borderBottom: "1px solid #e2e8f0", 
+          padding: "16px 24px", 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "space-between" 
+        }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={() => setSidebarOpen(true)} style={{ display: isMobile ? "block" : "none", background: "none", border: "none" }}>
+            <button 
+              onClick={() => setSidebarOpen(true)} 
+              style={{ 
+                display: isMobile ? "block" : "none", 
+                background: "none", 
+                border: "none" 
+              }}
+            >
               <LayoutDashboard size={22} />
             </button>
-            <h1 style={{ fontSize: "22px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
+            <h1 style={{ 
+              fontSize: "22px", 
+              fontWeight: "700", 
+              color: "#0f172a", 
+              margin: 0 
+            }}>
               {SIDEBAR_ITEMS.find(i => i.id === tab)?.label || "Dashboard"}
             </h1>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={fetchData} disabled={refreshing} style={{ padding: "8px 14px", borderRadius: "8px", background: "#f1f5f9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> Refresh
-            </button>
-          </div>
+          <button 
+            onClick={fetchData} 
+            disabled={refreshing} 
+            style={{ 
+              padding: "8px 14px", 
+              borderRadius: "8px", 
+              background: "#f1f5f9", 
+              border: "none", 
+              cursor: "pointer", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "6px" 
+            }}
+          >
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> Refresh
+          </button>
         </header>
 
         {/* Page Content */}
@@ -353,7 +431,6 @@ export default function SuperAdminDashboard() {
           {/* OVERVIEW TAB */}
           {tab === "overview" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-              {/* KPI Cards */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
                 <KPICard label="Total Businesses" value={kpi?.totalTenants.toString() ?? "0"} icon={Building2} color="#6366f1" loading={loading} />
                 <KPICard label="Active" value={kpi?.activeTenants.toString() ?? "0"} icon={CheckCircle2} color="#10b981" loading={loading} />
@@ -361,7 +438,6 @@ export default function SuperAdminDashboard() {
                 <KPICard label="Total Staff" value={kpi?.totalStaff.toString() ?? "0"} icon={Users} color="#f59e0b" loading={loading} />
               </div>
 
-              {/* Charts */}
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
                 <div style={{ background: "#fff", borderRadius: "14px", padding: "20px", border: "1px solid #f1f5f9" }}>
                   <h3 style={{ margin: "0 0 16px", fontWeight: "600" }}>Business Growth</h3>
@@ -370,7 +446,7 @@ export default function SuperAdminDashboard() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
+                      <RechartsTooltip content={<CustomTooltip />} />
                       <Area type="natural" dataKey="tenants" stroke="#6366f1" fill="#6366f120" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -385,7 +461,7 @@ export default function SuperAdminDashboard() {
                           <Cell key={`cell-${index}`} fill={["#94a3b8", "#3b82f6", "#8b5cf6"][index]} />
                         ))}
                       </Pie>
-                      <Tooltip content={<CustomTooltip />} />
+                      <RechartsTooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -396,31 +472,29 @@ export default function SuperAdminDashboard() {
           {/* TENANTS TAB */}
           {tab === "tenants" && (
             <div>
-              {/* Filters */}
-              <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
-                <div style={{ position: "relative", flex: 1, minWidth: "280px" }}>
-                  <Search style={{ position: "absolute", left: "14px", top: "12px", color: "#94a3b8" }} size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search businesses..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    style={{ width: "100%", padding: "12px 14px 12px 44px", borderRadius: "10px", border: "1px solid #e2e8f0" }}
-                  />
-                </div>
-
-                {/* Plan & Status filters + Sort */}
-                {/* ... (you can keep or expand this section) */}
-              </div>
-
-              {/* Tenant List */}
-              <div style={{ background: "#fff", borderRadius: "14px", border: "1px solid #f1f5f9" }}>
-                {filtered.map(t => (
-                  <div key={t.id} style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: "16px" }}>
-                    {/* Tenant info + actions */}
-                    {/* ... (your original tenant row content) */}
-                  </div>
-                ))}
+              <input
+                type="text"
+                placeholder="Search businesses..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: "100%", maxWidth: "400px", padding: "12px 16px", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "20px" }}
+              />
+              <div style={{ background: "#fff", borderRadius: "14px", padding: "20px", border: "1px solid #f1f5f9" }}>
+                {filtered.length === 0 ? (
+                  <p>No businesses found.</p>
+                ) : (
+                  filtered.map((t) => (
+                    <div key={t.id} style={{ padding: "16px", borderBottom: "1px solid #f1f5f9" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <strong>{t.name}</strong>
+                          <div style={{ color: "#64748b", fontSize: "14px" }}>{t.email}</div>
+                        </div>
+                        <PlanBadge plan={t.plan} />
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -428,57 +502,75 @@ export default function SuperAdminDashboard() {
           {/* STAFF TAB */}
           {tab === "staff" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}>
-                <input
-                  type="text"
-                  placeholder="Search staff..."
-                  value={staffSearch}
-                  onChange={(e) => setStaffSearch(e.target.value)}
-                  style={{ padding: "10px 14px", borderRadius: "8px", border: "1px solid #e2e8f0", width: "320px" }}
-                />
-              </div>
-
+              <input
+                type="text"
+                placeholder="Search staff..."
+                value={staffSearch}
+                onChange={(e) => setStaffSearch(e.target.value)}
+                style={{ padding: "10px 14px", borderRadius: "8px", border: "1px solid #e2e8f0", width: "320px", marginBottom: "16px" }}
+              />
               <div style={{ background: "#fff", borderRadius: "14px", padding: "16px", border: "1px solid #f1f5f9" }}>
-                {filteredStaff.map((s) => {
-                  const roleCfg = ROLE_CFG[s.role] || { color: "#64748b", bg: "#f1f5f9", icon: Shield };
-                  const RoleIcon = roleCfg.icon;
-                  return (
-                    <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid #f8fafc" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                        <div style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {s.full_name?.charAt(0)}
+                {filteredStaff.length === 0 ? (
+                  <p>No staff found.</p>
+                ) : (
+                  filteredStaff.map((s: any) => {
+                    const roleCfg = ROLE_CFG[s.role] || { color: "#64748b", bg: "#f1f5f9", icon: Shield };
+                    const RoleIcon = roleCfg.icon;
+                    return (
+                      <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid #f8fafc" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                          <div style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>
+                            {s.full_name?.charAt(0) || "?"}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: "600", fontSize: "14px" }}>{s.full_name}</div>
+                            <div style={{ fontSize: "13px", color: "#64748b" }}>{s.email}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ fontWeight: "600", fontSize: "14px" }}>{s.full_name}</div>
-                          <div style={{ fontSize: "13px", color: "#64748b" }}>{s.email}</div>
+                        <div style={{ fontSize: "13px", color: "#64748b" }}>
+                          {(s.tenants as any)?.name ?? "—"}
                         </div>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: roleCfg.bg, color: roleCfg.color, padding: "4px 10px", borderRadius: "99px", fontSize: "12px", fontWeight: "600" }}>
+                          <RoleIcon style={{ width: "14px", height: "14px" }} />
+                          {s.role}
+                        </span>
                       </div>
-                      <div style={{ fontSize: "13px", color: "#64748b" }}>{(s.tenants as any)?.name ?? "—"}</div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: roleCfg.bg, color: roleCfg.color, padding: "4px 10px", borderRadius: "99px", fontSize: "12px", fontWeight: "600" }}>
-                        <RoleIcon style={{ width: "14px", height: "14px" }} />
-                        {s.role}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
 
           {/* LICENSES TAB */}
-          {tab === "licenses" && <LicenseManager adminId={user?.id ?? ""} />}
+          {tab === "licenses" && user && <LicenseManager adminId={user.id} />}
 
-          {/* ACTIVITY & SETTINGS TABS */}
-          {tab === "activity" && ( /* your activity content */ )}
-          {tab === "settings" && ( /* your settings content */ )}
+          {/* ACTIVITY TAB */}
+          {tab === "activity" && (
+            <div style={{ background: "#fff", borderRadius: "14px", padding: "40px", textAlign: "center", border: "1px solid #f1f5f9" }}>
+              <Bell size={48} style={{ margin: "0 auto 16px", color: "#94a3b8" }} />
+              <h3>Activity Log</h3>
+              <p style={{ color: "#64748b" }}>Recent system activity will appear here.</p>
+            </div>
+          )}
 
+          {/* SETTINGS TAB */}
+          {tab === "settings" && (
+            <div style={{ background: "#fff", borderRadius: "14px", padding: "40px", textAlign: "center", border: "1px solid #f1f5f9" }}>
+              <Settings size={48} style={{ margin: "0 auto 16px", color: "#94a3b8" }} />
+              <h3>Super Admin Settings</h3>
+              <p style={{ color: "#64748b" }}>Global platform settings will be configured here.</p>
+            </div>
+          )}
         </div>
       </div>
 
       <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spin { 
+          from { transform: rotate(0deg); } 
+          to { transform: rotate(360deg); } 
+        }
       `}</style>
     </div>
   );
 }
- 
