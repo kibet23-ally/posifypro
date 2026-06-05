@@ -47,6 +47,7 @@ function Dashboard() {
         .from("profiles").select("org_id, organizations(name)").eq("id", user!.id).single();
       const tid = profile?.org_id;
       const businessName = (profile?.organizations as any)?.name ?? null;
+      if (!tid) return null;
 
       const now = new Date();
       const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
