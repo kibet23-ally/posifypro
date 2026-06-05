@@ -44,8 +44,8 @@ function Dashboard() {
     queryFn: async () => {
       // Get tenant
       const { data: profile } = await supabase
-        .from("profiles").select("tenant_id, tenants(name, currency)").eq("id", user!.id).single();
-      const tid = profile?.tenant_id;
+        .from("profiles").select("org_id, organizations(name)").eq("id", user!.id).single();
+      const tid = profile?.org_id;
       const businessName = (profile?.tenants as any)?.name ?? null;
 
       const now = new Date();
@@ -58,20 +58,20 @@ function Dashboard() {
       // Core queries
       const [todayOrders, yesterdayOrders, weekOrders, monthOrders, products, customers, lowStock, recentOrders] =
         await Promise.all([
-          supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
-          supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", yesterdayEnd.toISOString()),
-          supabase.from("orders").select("total_amount, created_at").eq("tenant_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
-          supabase.from("orders").select("total_amount, created_at, payment_method").eq("tenant_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
-          supabase.from("products").select("*", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true),
-          supabase.from("customers").select("*", { count: "exact", head: true }).eq("tenant_id", tid),
-          supabase.from("products").select("id, name, stock_quantity, image_url").eq("tenant_id", tid).eq("is_active", true).lte("stock_quantity", 10).order("stock_quantity").limit(6),
-          supabase.from("orders").select("id, order_number, total_amount, payment_method, created_at, profiles(full_name)").eq("tenant_id", tid).order("created_at", { ascending: false }).limit(8),
+          supabase.from("sales").select("total").eq("org_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
+          supabase.from("sales").select("total").eq("org_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", yesterdayEnd.toISOString()),
+          supabase.from("sales").select("total, created_at").eq("org_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
+          supabase.from("sales").select("total, created_at, payment_method").eq("org_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
+          supabase.from("products").select("*", { count: "exact", head: true }).eq("org_id", tid).eq("is_active", true),
+          supabase.from("customers").select("*", { count: "exact", head: true }).eq("org_id", tid),
+          supabase.from("products").select("id, name, stock, emoji").eq("org_id", tid).eq("is_active", true).lte("stock", 10).order("stock").limit(6),
+          supabase.from("sales").select("id, receipt_number, total, payment_method, created_at, profiles(name)").eq("org_id", tid).order("created_at", { ascending: false }).limit(8),
         ]);
 
-      const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const yesterdayRevenue = (yesterdayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const weekRevenue = (weekOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const monthRevenue = (monthOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
+      const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const yesterdayRevenue = (yesterdayOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const weekRevenue = (weekOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const monthRevenue = (monthOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
       const todayCount = todayOrders.data?.length ?? 0;
       const yesterdayCount = yesterdayOrders.data?.length ?? 0;
 
@@ -86,7 +86,7 @@ function Dashboard() {
         });
         days7.push({
           day: d.toLocaleDateString("en-KE", { weekday: "short" }),
-          revenue: dayOrders.reduce((s, o) => s + Number(o.total_amount), 0),
+          revenue: dayOrders.reduce((s, o) => s + Number(o.total), 0),
           orders: dayOrders.length,
         });
       }
@@ -308,13 +308,13 @@ function Dashboard() {
                     {METHOD_ICON[r.payment_method] ?? "🧾"}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold">{r.order_number}</div>
+                    <div className="text-sm font-semibold">{r.receipt_number}</div>
                     <div className="text-xs text-muted-foreground">
-                      {(r.profiles as any)?.full_name ?? "Walk-in"} ·{" "}
+                      {(r.profiles as any)?.name ?? "Walk-in"} ·{" "}
                       <span className="capitalize">{r.payment_method}</span>
                     </div>
                   </div>
-                  <div className="text-sm font-bold">{fmtMoney(Number(r.total_amount))}</div>
+                  <div className="text-sm font-bold">{fmtMoney(Number(r.total))}</div>
                 </div>
               );
             })}
@@ -338,8 +338,8 @@ function Dashboard() {
                 {(data?.lowStock ?? []).map((p: any) => (
                   <div key={p.id} className="flex items-center gap-2 text-sm">
                     <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 text-sm overflow-hidden">
-                      {p.image_url
-                        ? <img src={p.image_url} className="size-8 object-cover rounded-lg" alt="" />
+                      {p.emoji
+                        ? <img src={p.emoji} className="size-8 object-cover rounded-lg" alt="" />
                         : "📦"
                       }
                     </div>
@@ -349,14 +349,14 @@ function Dashboard() {
                         <div
                           className="h-1 rounded-full"
                           style={{
-                            width: `${Math.min(100, (p.stock_quantity / 10) * 100)}%`,
-                            background: p.stock_quantity === 0 ? "#ef4444" : p.stock_quantity <= 3 ? "#f59e0b" : "#10b981",
+                            width: `${Math.min(100, (p.stock / 10) * 100)}%`,
+                            background: p.stock === 0 ? "#ef4444" : p.stock <= 3 ? "#f59e0b" : "#10b981",
                           }}
                         />
                       </div>
                     </div>
-                    <span className={`text-xs font-bold shrink-0 ${p.stock_quantity === 0 ? "text-destructive" : "text-amber-500"}`}>
-                      {p.stock_quantity === 0 ? "Out!" : `${p.stock_quantity}`}
+                    <span className={`text-xs font-bold shrink-0 ${p.stock === 0 ? "text-destructive" : "text-amber-500"}`}>
+                      {p.stock === 0 ? "Out!" : `${p.stock}`}
                     </span>
                   </div>
                 ))}

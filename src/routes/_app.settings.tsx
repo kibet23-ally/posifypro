@@ -56,7 +56,7 @@ function SettingsPage() {
     if (!tenantId) { toast.error("No business found"); return; }
     setSavingBiz(true);
     try {
-      const { error } = await supabase.from("tenants")
+      const { error } = await supabase.from("organizations")
         .update({
           name:     biz.name.trim(),
           email:    biz.email || null,

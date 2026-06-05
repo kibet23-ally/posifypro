@@ -27,7 +27,7 @@ type Form = {
   name: string;
   price: number;
   cost_price: number;
-  stock_quantity: number;
+  stock: number;
   category_name: string;
   emoji: string;
   barcode: string;
@@ -36,7 +36,7 @@ type Form = {
 };
 
 const empty: Form = {
-  name: "", price: 0, cost_price: 0, stock_quantity: 0,
+  name: "", price: 0, cost_price: 0, stock: 0,
   category_name: "", emoji: "📦", barcode: "", sku: "", low_stock_threshold: 10,
 };
 
@@ -57,14 +57,14 @@ function ProductsPage() {
       (await supabase
         .from("products")
         .select("*")
-        .eq("tenant_id", tenantId!)
+        .eq("org_id", tenantId!)
         .eq("is_active", true)
         .order("name")
       ).data ?? [],
   });
 
   const lowStockCount = products.filter(
-    p => (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 10)
+    p => (p.stock ?? 0) <= (p.low_stock_threshold ?? 10)
   ).length;
 
   const filtered = products
@@ -74,12 +74,12 @@ function ProductsPage() {
         (p.category_name ?? "").toLowerCase().includes(q) ||
         (p.sku ?? "").toLowerCase().includes(q);
       const matchLow = !filterLowStock ||
-        (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 10);
+        (p.stock ?? 0) <= (p.low_stock_threshold ?? 10);
       return matchSearch && matchLow;
     })
     .sort((a, b) => {
       if (sortBy === "price") return Number(b.price) - Number(a.price);
-      if (sortBy === "stock") return (a.stock_quantity ?? 0) - (b.stock_quantity ?? 0);
+      if (sortBy === "stock") return (a.stock ?? 0) - (b.stock ?? 0);
       return a.name.localeCompare(b.name);
     });
 
@@ -94,14 +94,14 @@ function ProductsPage() {
         name: form.name.trim(),
         price: form.price,
         cost_price: form.cost_price || 0,
-        stock_quantity: form.stock_quantity || 0,
+        stock: form.stock || 0,
         low_stock_threshold: form.low_stock_threshold || 10,
         category_name: form.category_name || null,
         emoji: form.emoji || "📦",
         sku: form.sku || null,
         barcode: form.barcode || null,
         is_active: true,
-        tenant_id: tenantId,
+        org_id: tenantId,
       };
 
       const { error } = form.id
@@ -139,7 +139,7 @@ function ProductsPage() {
       name: p.name,
       price: Number(p.price),
       cost_price: Number(p.cost_price ?? 0),
-      stock_quantity: p.stock_quantity ?? 0,
+      stock: p.stock ?? 0,
       category_name: p.category_name ?? "",
       emoji: p.emoji ?? "📦",
       barcode: p.barcode ?? "",
@@ -208,7 +208,7 @@ function ProductsPage() {
               {/* Stock + Low stock */}
               <div className="space-y-1.5">
                 <Label>Stock Quantity</Label>
-                <Input type="number" min="0" value={form.stock_quantity || ""} onChange={f("stock_quantity")} placeholder="0" />
+                <Input type="number" min="0" value={form.stock || ""} onChange={f("stock")} placeholder="0" />
               </div>
               <div className="space-y-1.5">
                 <Label>Low Stock Alert</Label>
@@ -297,7 +297,7 @@ function ProductsPage() {
           {/* Mobile card grid */}
           <div className="grid grid-cols-2 gap-3 md:hidden">
             {filtered.map(p => {
-              const isLow = (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 10);
+              const isLow = (p.stock ?? 0) <= (p.low_stock_threshold ?? 10);
               const margin = p.price > 0 && p.cost_price > 0
                 ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null;
               return (
@@ -314,7 +314,7 @@ function ProductsPage() {
                   )}
                   <div className="font-bold mt-1">{fmtMoney(Number(p.price))}</div>
                   <div className={`text-xs mt-0.5 ${isLow ? "text-amber-500 font-semibold" : "text-muted-foreground"}`}>
-                    {p.stock_quantity ?? 0} in stock
+                    {p.stock ?? 0} in stock
                     {isLow && " ⚠"}
                   </div>
                   {margin !== null && (
@@ -349,7 +349,7 @@ function ProductsPage() {
               </thead>
               <tbody>
                 {filtered.map(p => {
-                  const isLow = (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 10);
+                  const isLow = (p.stock ?? 0) <= (p.low_stock_threshold ?? 10);
                   const margin = p.price > 0 && p.cost_price > 0
                     ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null;
                   return (
@@ -381,7 +381,7 @@ function ProductsPage() {
                       </td>
                       <td className="p-3 text-right">
                         <span className={`font-medium ${isLow ? "text-amber-500" : ""}`}>
-                          {p.stock_quantity ?? 0}
+                          {p.stock ?? 0}
                           {isLow && " ⚠"}
                         </span>
                       </td>

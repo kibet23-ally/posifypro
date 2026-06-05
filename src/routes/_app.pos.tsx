@@ -20,8 +20,8 @@ interface Product {
   id: string;
   name: string;
   price: number;
-  stock_quantity: number;
-  image_url?: string;
+  stock: number;
+  emoji?: string;
   category_id?: string;
   categories?: { name: string; color: string };
 }
@@ -49,7 +49,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
         <div style={{ textAlign: "center", marginBottom: "16px" }}>
           <CheckCircle style={{ width: "40px", height: "40px", color: "#10b981", margin: "0 auto 8px" }} />
           <h2 style={{ fontWeight: "800", fontSize: "18px", margin: 0 }}>Sale Complete!</h2>
-          <p style={{ color: "#6b7280", fontSize: "12px", marginTop: "4px" }}>{order.order_number}</p>
+          <p style={{ color: "#6b7280", fontSize: "12px", marginTop: "4px" }}>{order.receipt_number}</p>
         </div>
         <div style={{ borderTop: "1px dashed #e5e7eb", borderBottom: "1px dashed #e5e7eb", padding: "12px 0", marginBottom: "12px" }}>
           {order.items.map((item: any) => (
@@ -72,7 +72,7 @@ function ReceiptModal({ order, onClose }: { order: any; onClose: () => void }) {
           )}
           <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "800", fontSize: "16px", marginTop: "8px" }}>
             <span>Total</span>
-            <span>{fmtMoney(order.total_amount)}</span>
+            <span>{fmtMoney(order.total)}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", color: "#6b7280" }}>
             <span>Paid ({order.payment_method})</span>
@@ -112,11 +112,11 @@ function POS() {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("tenant_id, id")
+      .select("org_id, id")
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
-        if (data) { setTenantId(data.tenant_id); setCashierId(data.id); }
+        if (data) { setTenantId(data.org_id); setCashierId(data.id); }
       });
   }, [user]);
 
@@ -128,9 +128,9 @@ function POS() {
       const { data } = await supabase
         .from("products")
         .select("*, categories(name, color)")
-        .eq("tenant_id", tenantId!)
+        .eq("org_id", tenantId!)
         .eq("is_active", true)
-        .gt("stock_quantity", 0)
+        .gt("stock", 0)
         .order("name");
       return (data ?? []) as Product[];
     },
@@ -153,8 +153,8 @@ function POS() {
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock_quantity) {
-          toast.error(`Only ${product.stock_quantity} in stock`);
+        if (existing.quantity >= product.stock) {
+          toast.error(`Only ${product.stock} in stock`);
           return prev;
         }
         return prev.map(i => i.product.id === product.id
@@ -178,9 +178,9 @@ function POS() {
   // Generate order number
   const genOrderNumber = async () => {
     const { count } = await supabase
-      .from("orders")
+      .from("sales")
       .select("*", { count: "exact", head: true })
-      .eq("tenant_id", tenantId!);
+      .eq("org_id", tenantId!);
     return `ORD-${String((count ?? 0) + 1).padStart(4, "0")}`;
   };
 
@@ -195,17 +195,17 @@ function POS() {
 
       // Create order
       const { data: order, error: orderErr } = await supabase
-        .from("orders")
+        .from("sales")
         .insert({
-          tenant_id: tenantId,
+          org_id: tenantId,
           cashier_id: cashierId,
-          order_number: orderNumber,
+          receipt_number: orderNumber,
           status: "completed",
           payment_method: paymentMethod,
           subtotal,
           discount_amount: discountAmt,
           tax_amount: 0,
-          total_amount: total,
+          total: total,
           amount_paid: paymentMethod === "cash" ? paid : total,
           change_amount: paymentMethod === "cash" ? change : 0,
         })
@@ -217,7 +217,7 @@ function POS() {
       // Create order items
       const items = cart.map(i => ({
         order_id: order.id,
-        tenant_id: tenantId,
+        org_id: tenantId,
         product_id: i.product.id,
         product_name: i.product.name,
         product_price: i.product.price,
@@ -226,14 +226,14 @@ function POS() {
         total: i.product.price * i.quantity,
       }));
 
-      const { error: itemsErr } = await supabase.from("order_items").insert(items);
+      const { error: itemsErr } = await supabase.from("sale_items").insert(items);
       if (itemsErr) throw itemsErr;
 
       // Decrement stock
       for (const i of cart) {
         await supabase
           .from("products")
-          .update({ stock_quantity: i.product.stock_quantity - i.quantity })
+          .update({ stock: i.product.stock - i.quantity })
           .eq("id", i.product.id);
       }
 
@@ -290,14 +290,14 @@ function POS() {
                     className={`p-3 cursor-pointer transition-all hover:shadow-md active:scale-95 ${inCart ? "ring-2 ring-primary" : ""}`}
                   >
                     <div className="aspect-square rounded-lg bg-muted mb-2 flex items-center justify-center overflow-hidden">
-                      {p.image_url
-                        ? <img src={p.image_url} className="w-full h-full object-cover" alt={p.name} />
+                      {p.emoji
+                        ? <img src={p.emoji} className="w-full h-full object-cover" alt={p.name} />
                         : <span className="text-2xl">📦</span>
                       }
                     </div>
                     <p className="text-xs font-semibold truncate">{p.name}</p>
                     <p className="text-sm font-bold text-primary mt-0.5">{fmtMoney(p.price)}</p>
-                    <p className="text-xs text-muted-foreground">{p.stock_quantity} in stock</p>
+                    <p className="text-xs text-muted-foreground">{p.stock} in stock</p>
                     {inCart && (
                       <div className="mt-1 bg-primary text-primary-foreground rounded text-xs text-center py-0.5 font-semibold">
                         {inCart.quantity} in cart
