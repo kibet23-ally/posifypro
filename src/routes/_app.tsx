@@ -209,6 +209,5 @@ function AppLayout() {
         </main>
       </div>
     </div>
-    </div>
   );
 }
