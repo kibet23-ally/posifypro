@@ -642,11 +642,21 @@ export default function SuperAdminDashboard() {
           {/* ── LICENSES ── */}
           {tab === "licenses" && (
             <div>
-              <h2 style={{ margin: "0 0 16px", fontWeight: 700, fontSize: 18, color: "#0f172a" }}>Licenses</h2>
+              <h2
+                style={{
+                  margin: "0 0 16px",
+                  fontWeight: 700,
+                  fontSize: 18,
+                  color: "#0f172a",
+                }}
+              >
+                Licenses
+              </h2>
               <LicenseManager adminId={user.id} />
             </div>
           )}
-
         </div>
+      </div>
+    </div>
   );
 }
