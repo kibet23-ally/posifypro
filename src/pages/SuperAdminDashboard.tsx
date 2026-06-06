@@ -87,18 +87,31 @@ export default function SuperAdminDashboard() {
   const load = useCallback(async()=>{
     setRefreshing(true);
     try {
-      const {data:tr}=await supabase.from("tenants").select("*").neq("slug","posifypro").order("created_at",{ascending:false});
-      if(!tr)return;
-      const en:Tenant[]=await Promise.all(tr.map(async t=>{
-        const [sr,or]=await Promise.all([
-          supabase.from("profiles").select("id",{count:"exact",head:true}).eq("tenant_id",t.id),
-          supabase.from("orders").select("id",{count:"exact",head:true}).eq("tenant_id",t.id),
+      const {data:tr}=await supabase.from("organizations").select("*").order("created_at",{ascending:false});
+      if(!tr){setLoading(false);setRefreshing(false);return;}
+      const statusToPlan = (s:string|null):"free"|"basic"|"pro" => s==="lifetime"?"pro":s==="active"?"basic":"free";
+      const en:Tenant[]=await Promise.all((tr as any[]).map(async t=>{
+        const [sr,or,owner]=await Promise.all([
+          supabase.from("organization_members").select("user_id",{count:"exact",head:true}).eq("org_id",t.id),
+          supabase.from("sales").select("id",{count:"exact",head:true}).eq("org_id",t.id),
+          supabase.from("profiles").select("email").eq("id",t.owner_id).maybeSingle(),
         ]);
-        return {...t,staff_count:sr.count??0,order_count:or.count??0};
+        return {
+          id:t.id,
+          name:t.name,
+          slug:String(t.name||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""),
+          email:(owner.data as any)?.email??"—",
+          plan:statusToPlan(t.license_status),
+          is_active:t.license_status!=="expired",
+          created_at:t.created_at,
+          currency:"KES",
+          staff_count:sr.count??0,
+          order_count:or.count??0,
+        };
       }));
       setTenants(en);
-      const {data:sd}=await supabase.from("profiles").select("*,tenants(name)").neq("role","super_admin").order("created_at",{ascending:false});
-      setAllStaff(sd??[]);
+      const {data:sd}=await supabase.from("profiles").select("*,organizations:org_id(name)").neq("role","super_admin").order("created_at",{ascending:false});
+      setAllStaff((sd as any[])??[]);
       const now=new Date();
       const ms=new Date(now.getFullYear(),now.getMonth(),1);
       const lms=new Date(now.getFullYear(),now.getMonth()-1,1);
@@ -111,8 +124,8 @@ export default function SuperAdminDashboard() {
 
   useEffect(()=>{load();},[load]);
 
-  const toggleStatus=async(t:Tenant)=>{setAl(true);await supabase.from("tenants").update({is_active:!t.is_active}).eq("id",t.id);await load();setSel(prev=>prev?{...prev,is_active:!t.is_active}:null);setAl(false);};
-  const changePlan=async(t:Tenant,plan:"free"|"basic"|"pro")=>{setAl(true);await supabase.from("tenants").update({plan}).eq("id",t.id);await supabase.from("subscriptions").update({plan}).eq("tenant_id",t.id);await load();setSel(prev=>prev?{...prev,plan}:null);setAl(false);};
+  const toggleStatus=async(t:Tenant)=>{setAl(true);await supabase.from("organizations").update({license_status:t.is_active?"expired":"active"} as any).eq("id",t.id);await load();setSel(prev=>prev?{...prev,is_active:!t.is_active}:null);setAl(false);};
+  const changePlan=async(t:Tenant,plan:"free"|"basic"|"pro")=>{setAl(true);const status=plan==="pro"?"lifetime":plan==="basic"?"active":"trial";await supabase.from("organizations").update({license_status:status} as any).eq("id",t.id);await load();setSel(prev=>prev?{...prev,plan}:null);setAl(false);};
   const signOut=async()=>{await supabase.auth.signOut();navigate({to:"/login"});};
 
   const filtered=tenants.filter(t=>{const q=search.toLowerCase();return(!q||t.name.toLowerCase().includes(q)||t.email.toLowerCase().includes(q))&&(fp==="all"||t.plan===fp)&&(fs==="all"||(fs==="active"?t.is_active:!t.is_active));}).sort((a,b)=>{if(sortBy==="staff")return(b.staff_count??0)-(a.staff_count??0);if(sortBy==="orders")return(b.order_count??0)-(a.order_count??0);return new Date(b.created_at).getTime()-new Date(a.created_at).getTime();});
