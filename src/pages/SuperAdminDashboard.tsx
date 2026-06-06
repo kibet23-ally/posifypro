@@ -129,7 +129,7 @@ export default function SuperAdminDashboard() {
   const signOut=async()=>{await supabase.auth.signOut();navigate({to:"/login"});};
 
   const filtered=tenants.filter(t=>{const q=search.toLowerCase();return(!q||t.name.toLowerCase().includes(q)||t.email.toLowerCase().includes(q))&&(fp==="all"||t.plan===fp)&&(fs==="all"||(fs==="active"?t.is_active:!t.is_active));}).sort((a,b)=>{if(sortBy==="staff")return(b.staff_count??0)-(a.staff_count??0);if(sortBy==="orders")return(b.order_count??0)-(a.order_count??0);return new Date(b.created_at).getTime()-new Date(a.created_at).getTime();});
-  const fstaff=allStaff.filter(s=>{const q=ss.toLowerCase();return !q||s.full_name?.toLowerCase().includes(q)||s.email?.toLowerCase().includes(q);});
+  const fstaff=allStaff.filter(s=>{const q=ss.toLowerCase();return !q||s.name?.toLowerCase().includes(q)||s.email?.toLowerCase().includes(q);});
   const pd=[{name:"Free",value:kpi?.freeTenants??0},{name:"Basic",value:kpi?.basicTenants??0},{name:"Pro",value:kpi?.proTenants??0}];
   const W=240;
 
@@ -440,10 +440,10 @@ export default function SuperAdminDashboard() {
                   return (
                     <div key={s.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 120px 120px",padding:"12px 20px",alignItems:"center",borderBottom:i<fstaff.length-1?"1px solid #f8fafc":"none"}}>
                       <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                        <div style={{width:"32px",height:"32px",borderRadius:"99px",background:rc.bg,display:"flex",alignItems:"center",justifyContent:"center",color:rc.color,fontWeight:"800",fontSize:"12px"}}>{s.full_name?.charAt(0)?.toUpperCase()??"?"}</div>
-                        <div><div style={{fontWeight:"600",fontSize:"13px",color:"#0f172a"}}>{s.full_name}</div><div style={{fontSize:"11px",color:"#94a3b8"}}>{s.email}</div></div>
+                        <div style={{width:"32px",height:"32px",borderRadius:"99px",background:rc.bg,display:"flex",alignItems:"center",justifyContent:"center",color:rc.color,fontWeight:"800",fontSize:"12px"}}>{s.name?.charAt(0)?.toUpperCase()??"?"}</div>
+                        <div><div style={{fontWeight:"600",fontSize:"13px",color:"#0f172a"}}>{s.name}</div><div style={{fontSize:"11px",color:"#94a3b8"}}>{s.email}</div></div>
                       </div>
-                      <div style={{fontSize:"12px",color:"#64748b"}}>{(s.tenants as any)?.name??"—"}</div>
+                      <div style={{fontSize:"12px",color:"#64748b"}}>{(s.organizations as any)?.name??"—"}</div>
                       <span style={{display:"inline-flex",alignItems:"center",gap:"5px",background:rc.bg,color:rc.color,padding:"3px 9px",borderRadius:"99px",fontSize:"11px",fontWeight:"700"}}>
                         <RI style={{width:"10px",height:"10px"}}/>
                         {s.role?.charAt(0).toUpperCase()+s.role?.slice(1)}
