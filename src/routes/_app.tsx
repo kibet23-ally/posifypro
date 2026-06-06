@@ -35,12 +35,7 @@ function AppLayout() {
 
   // ── Check role: redirect super admin to /admin ──
 useEffect(() => {
-  if (loading || !user) {
-    console.log("🔄 Role check skipped - loading:", loading, "user:", !!user);
-    return;
-  }
-
-  console.log("🔍 Starting role check for user:", user.id, user.email);
+  if (loading || !user) return;
 
   supabase
     .from("profiles")
@@ -48,27 +43,32 @@ useEffect(() => {
     .eq("id", user.id)
     .single()
     .then(({ data, error }) => {
-      console.log("📡 Supabase response:", { data, error });
-
       if (error) {
-        console.error("❌ Role check failed:", error);
+        console.error("❌ Profile query error:", error);
         setRoleChecked(true);
         return;
       }
 
-      if (data?.role === "super_admin") {
-        console.log("✅ Super admin detected! Redirecting to /admin");
+      if (!data) {
+        console.warn("⚠️ No profile row found");
+        setRoleChecked(true);
+        return;
+      }
+
+      // Super Admin Check
+      if (data.role === "super_admin" || data.role?.toLowerCase().includes("super")) {
+        console.log("🚀 Super admin detected → redirecting");
         navigate({ to: "/admin", replace: true });
         return;
       }
 
-      console.log("👤 Regular user - role:", data?.role);
+      // Normal user
       const name = (data?.tenants as any)?.name;
       if (name) setBusinessName(name);
       setRoleChecked(true);
     })
     .catch((err) => {
-      console.error("💥 Role check error:", err);
+      console.error("💥 Role check failed:", err);
       setRoleChecked(true);
     });
 }, [user, loading, navigate]);
