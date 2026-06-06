@@ -1,5 +1,6 @@
 // src/routes/_app.dashboard.tsx
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,6 +37,24 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 
 function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // ── Hard redirect for super admins (safety net) ──
+  useEffect(() => {
+    if (!user) return;
+
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.role === "super_admin" || data?.role?.toLowerCase().includes("super")) {
+          navigate({ to: "/admin", replace: true });
+        }
+      });
+  }, [user, navigate]);
+
   const { org } = useOrg();
 
   const { data, isLoading } = useQuery({
