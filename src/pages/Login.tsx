@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { signIn, resetPassword } from '@/lib/auth'
+import { supabase } from '@/integrations/supabase/client'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -16,8 +17,18 @@ export default function Login() {
     if (!email || !password) { setError('Please fill in all fields'); return }
     setIsLoading(true); setError('')
     try {
-      await signIn(email, password)
-      navigate({ to: '/dashboard' })
+      const { user } = await signIn(email, password)
+      // Route super admins to the super-admin dashboard
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (profile?.role === 'super_admin') {
+        navigate({ to: '/admin' })
+      } else {
+        navigate({ to: '/dashboard' })
+      }
     } catch (err: any) {
       setError(err.message ?? 'Invalid email or password')
     } finally {
