@@ -1,520 +1,624 @@
 // src/pages/SuperAdminDashboard.tsx
-import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "@tanstack/react-router";
+// Clean, responsive super-admin dashboard with shadcn Sidebar.
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate, Link, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import LicenseManager from "@/components/admin/LicenseManager";
-import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { LayoutDashboard, Building2, TrendingUp, Users, Crown, Shield, UserCheck, CheckCircle2, XCircle, LogOut, Zap, RefreshCw, Search, X, ChevronRight, Bell, Settings, Key, AlertTriangle } from "lucide-react";
+import { signOut as doSignOut } from "@/lib/auth";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+  SidebarInset,
+} from "@/components/ui/sidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  LogOut,
+  Search,
+  Shield,
+  CheckCircle2,
+  XCircle,
+  Crown,
+  Sparkles,
+  RefreshCw,
+} from "lucide-react";
 
-type AdminTab = "overview" | "tenants" | "analytics" | "staff" | "licenses" | "activity" | "settings";
-interface Tenant { id: string; name: string; slug: string; email: string; plan: "free"|"basic"|"pro"; is_active: boolean; created_at: string; currency: string; staff_count?: number; order_count?: number; }
-interface KPI { totalTenants: number; activeTenants: number; newThisMonth: number; suspendedTenants: number; totalStaff: number; proTenants: number; basicTenants: number; freeTenants: number; tenantGrowth: number; }
-interface GP { month: string; tenants: number; }
+type Plan = "free" | "basic" | "pro";
+type StatusFilter = "all" | "active" | "suspended";
+type PlanFilter = "all" | Plan;
 
-const PC = { free: { c: "#94a3b8", bg: "#f1f5f9", l: "Free" }, basic: { c: "#3b82f6", bg: "#eff6ff", l: "Basic" }, pro: { c: "#8b5cf6", bg: "#f5f3ff", l: "Pro" } };
-const PCOLS = ["#94a3b8","#3b82f6","#8b5cf6"];
-const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const RC: Record<string,{color:string;bg:string;icon:any}> = { owner:{color:"#f59e0b",bg:"#fffbeb",icon:Crown}, manager:{color:"#3b82f6",bg:"#eff6ff",icon:Shield}, cashier:{color:"#10b981",bg:"#f0fdf4",icon:UserCheck} };
-const NAV = [
-  {id:"overview",l:"Overview",icon:LayoutDashboard},
-  {id:"tenants",l:"Businesses",icon:Building2},
-  {id:"analytics",l:"Analytics",icon:TrendingUp},
-  {id:"staff",l:"All Staff",icon:Users},
-  {id:"licenses",l:"Licenses",icon:Key},
-  {id:"activity",l:"Activity",icon:Bell},
-  {id:"settings",l:"Settings",icon:Settings},
-] as const;
-
-function Badge({plan}:{plan:"free"|"basic"|"pro"}) {
-  const c = PC[plan];
-  return <span style={{background:c.bg,color:c.c,padding:"2px 9px",borderRadius:"99px",fontSize:"10px",fontWeight:"700",textTransform:"uppercase",border:`1px solid ${c.c}30`}}>{c.l}</span>;
+interface OrgRow {
+  id: string;
+  name: string;
+  owner_email: string;
+  plan: Plan;
+  license_status: string;
+  is_active: boolean;
+  created_at: string;
+  staff_count: number;
+  sales_count: number;
 }
 
-function KCard({label,value,icon:I,trend,color,loading,sub}:{label:string;value:string;icon:any;trend?:number;color:string;loading?:boolean;sub?:string}) {
-  const up=(trend??0)>=0;
-  return (
-    <div style={{background:"#fff",borderRadius:"14px",padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)",border:"1px solid #f1f5f9"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}>
-        <div style={{background:`${color}15`,borderRadius:"10px",padding:"8px"}}><I style={{width:"17px",height:"17px",color}} /></div>
-        {trend!==undefined && <span style={{fontSize:"11px",fontWeight:"700",padding:"2px 7px",borderRadius:"99px",background:up?"#f0fdf4":"#fef2f2",color:up?"#16a34a":"#dc2626"}}>{up?"↑":"↓"} {Math.abs(trend)}%</span>}
-      </div>
-      {loading ? <div style={{height:"28px",background:"#f1f5f9",borderRadius:"6px",marginBottom:"6px"}} /> : <div style={{fontSize:"24px",fontWeight:"800",color:"#0f172a"}}>{value}</div>}
-      <div style={{fontSize:"12px",color:"#94a3b8",marginTop:"4px"}}>{label}</div>
-      {sub && <div style={{fontSize:"11px",color:"#cbd5e1",marginTop:"2px"}}>{sub}</div>}
-    </div>
-  );
+interface StaffRow {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string | null;
+  is_active: boolean | null;
+  org_name: string | null;
 }
 
-const CT = ({active,payload,label}:any) => !active||!payload?.length ? null : (
-  <div style={{background:"#0f172a",borderRadius:"8px",padding:"8px 12px",fontSize:"12px",color:"#fff"}}>
-    <div style={{color:"#94a3b8",marginBottom:"4px"}}>{label}</div>
-    {payload.map((p:any)=><div key={p.name} style={{fontWeight:"700"}}>{p.name}: {p.value}</div>)}
-  </div>
-);
+const statusToPlan = (s: string | null): Plan =>
+  s === "lifetime" ? "pro" : s === "active" ? "basic" : "free";
+
+const planToStatus = (p: Plan): string =>
+  p === "pro" ? "lifetime" : p === "basic" ? "active" : "trial";
+
+const planBadge = (p: Plan) =>
+  p === "pro"
+    ? "bg-amber-100 text-amber-700 border-amber-200"
+    : p === "basic"
+      ? "bg-blue-100 text-blue-700 border-blue-200"
+      : "bg-slate-100 text-slate-600 border-slate-200";
 
 export default function SuperAdminDashboard() {
-  const {user} = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [tab,setTab] = useState<AdminTab>("overview");
-  const [tenants,setTenants] = useState<Tenant[]>([]);
-  const [allStaff,setAllStaff] = useState<any[]>([]);
-  const [kpi,setKpi] = useState<KPI|null>(null);
-  const [gd,setGd] = useState<GP[]>([]);
-  const [loading,setLoading] = useState(true);
-  const [refreshing,setRefreshing] = useState(false);
-  const [search,setSearch] = useState("");
-  const [ss,setSs] = useState("");
-  const [fp,setFp] = useState<"all"|"free"|"basic"|"pro">("all");
-  const [fs,setFs] = useState<"all"|"active"|"suspended">("all");
-  const [sel,setSel] = useState<Tenant|null>(null);
-  const [al,setAl] = useState(false);
-  const [sidebarOpen,setSidebarOpen] = useState(false);
-  const [sortBy,setSortBy] = useState<"newest"|"staff"|"orders">("newest");
-  const [isMobile,setIsMobile] = useState(typeof window!=="undefined"&&window.innerWidth<768);
+  const currentPath = useRouterState({ select: (s) => s.location.pathname });
 
-  useEffect(()=>{
-    const h=()=>setIsMobile(window.innerWidth<768);
-    window.addEventListener("resize",h);
-    return ()=>window.removeEventListener("resize",h);
-  },[]);
+  const [tab, setTab] = useState<"overview" | "businesses" | "staff">("overview");
+  const [orgs, setOrgs] = useState<OrgRow[]>([]);
+  const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [staffSearch, setStaffSearch] = useState("");
 
-  useEffect(()=>{
-    if(!user)return;
-    supabase.from("profiles").select("role").eq("id",user.id).single().then(({data})=>{if(data?.role!=="super_admin")navigate({to:"/dashboard"});});
-  },[user]);
+  // Guard: only super_admin can view this page
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.role !== "super_admin") navigate({ to: "/dashboard" });
+      });
+  }, [user, navigate]);
 
-  const load = useCallback(async()=>{
+  const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const {data:tr}=await supabase.from("organizations").select("*").order("created_at",{ascending:false});
-      if(!tr){setLoading(false);setRefreshing(false);return;}
-      const statusToPlan = (s:string|null):"free"|"basic"|"pro" => s==="lifetime"?"pro":s==="active"?"basic":"free";
-      const en:Tenant[]=await Promise.all((tr as any[]).map(async t=>{
-        const [sr,or,owner]=await Promise.all([
-          supabase.from("organization_members").select("user_id",{count:"exact",head:true}).eq("org_id",t.id),
-          supabase.from("sales").select("id",{count:"exact",head:true}).eq("org_id",t.id),
-          supabase.from("profiles").select("email").eq("id",t.owner_id).maybeSingle(),
-        ]);
-        return {
-          id:t.id,
-          name:t.name,
-          slug:String(t.name||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""),
-          email:(owner.data as any)?.email??"—",
-          plan:statusToPlan(t.license_status),
-          is_active:t.license_status!=="expired",
-          created_at:t.created_at,
-          currency:"KES",
-          staff_count:sr.count??0,
-          order_count:or.count??0,
-        };
-      }));
-      setTenants(en);
-      const {data:sd}=await supabase.from("profiles").select("*,organizations:org_id(name)").neq("role","super_admin").order("created_at",{ascending:false});
-      setAllStaff((sd as any[])??[]);
-      const now=new Date();
-      const ms=new Date(now.getFullYear(),now.getMonth(),1);
-      const lms=new Date(now.getFullYear(),now.getMonth()-1,1);
-      const ntm=en.filter(t=>new Date(t.created_at)>=ms).length;
-      const nlm=en.filter(t=>{const d=new Date(t.created_at);return d>=lms&&d<ms;}).length;
-      setKpi({totalTenants:en.length,activeTenants:en.filter(t=>t.is_active).length,suspendedTenants:en.filter(t=>!t.is_active).length,newThisMonth:ntm,totalStaff:(sd??[]).length,proTenants:en.filter(t=>t.plan==="pro").length,basicTenants:en.filter(t=>t.plan==="basic").length,freeTenants:en.filter(t=>t.plan==="free").length,tenantGrowth:nlm>0?Math.round(((ntm-nlm)/nlm)*100):ntm>0?100:0});
-      setGd(Array.from({length:6},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-(5-i));const me=new Date(d.getFullYear(),d.getMonth()+1,0);return {month:MO[d.getMonth()],tenants:en.filter(t=>new Date(t.created_at)<=me).length};}));
-    } finally { setLoading(false); setRefreshing(false); }
-  },[]);
+      const { data: orgRows } = await supabase
+        .from("organizations")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-  useEffect(()=>{load();},[load]);
+      if (!orgRows) {
+        setOrgs([]);
+        return;
+      }
 
-  const toggleStatus=async(t:Tenant)=>{setAl(true);await supabase.from("organizations").update({license_status:t.is_active?"expired":"active"} as any).eq("id",t.id);await load();setSel(prev=>prev?{...prev,is_active:!t.is_active}:null);setAl(false);};
-  const changePlan=async(t:Tenant,plan:"free"|"basic"|"pro")=>{setAl(true);const status=plan==="pro"?"lifetime":plan==="basic"?"active":"trial";await supabase.from("organizations").update({license_status:status} as any).eq("id",t.id);await load();setSel(prev=>prev?{...prev,plan}:null);setAl(false);};
-  const signOut=async()=>{await supabase.auth.signOut();navigate({to:"/login"});};
+      const enriched: OrgRow[] = await Promise.all(
+        (orgRows as any[]).map(async (o) => {
+          const [staffCount, salesCount, owner] = await Promise.all([
+            supabase
+              .from("organization_members")
+              .select("user_id", { count: "exact", head: true })
+              .eq("org_id", o.id),
+            supabase
+              .from("sales")
+              .select("id", { count: "exact", head: true })
+              .eq("org_id", o.id),
+            supabase
+              .from("profiles")
+              .select("email")
+              .eq("id", o.owner_id)
+              .maybeSingle(),
+          ]);
+          return {
+            id: o.id,
+            name: o.name,
+            owner_email: (owner.data as any)?.email ?? "—",
+            plan: statusToPlan(o.license_status),
+            license_status: o.license_status ?? "trial",
+            is_active: o.license_status !== "expired",
+            created_at: o.created_at,
+            staff_count: staffCount.count ?? 0,
+            sales_count: salesCount.count ?? 0,
+          };
+        }),
+      );
+      setOrgs(enriched);
 
-  const filtered=tenants.filter(t=>{const q=search.toLowerCase();return(!q||t.name.toLowerCase().includes(q)||t.email.toLowerCase().includes(q))&&(fp==="all"||t.plan===fp)&&(fs==="all"||(fs==="active"?t.is_active:!t.is_active));}).sort((a,b)=>{if(sortBy==="staff")return(b.staff_count??0)-(a.staff_count??0);if(sortBy==="orders")return(b.order_count??0)-(a.order_count??0);return new Date(b.created_at).getTime()-new Date(a.created_at).getTime();});
-  const fstaff=allStaff.filter(s=>{const q=ss.toLowerCase();return !q||s.name?.toLowerCase().includes(q)||s.email?.toLowerCase().includes(q);});
-  const pd=[{name:"Free",value:kpi?.freeTenants??0},{name:"Basic",value:kpi?.basicTenants??0},{name:"Pro",value:kpi?.proTenants??0}];
-  const W=240;
+      const { data: staffData } = await supabase
+        .from("profiles")
+        .select("id, name, email, role, is_active, organizations:org_id(name)")
+        .neq("role", "super_admin")
+        .order("created_at", { ascending: false });
 
-  const sidebar=(
-    <aside style={{width:`${W}px`,background:"#0f172a",display:"flex",flexDirection:"column",flexShrink:0,height:"100vh",...(isMobile?{position:"fixed" as any,left:sidebarOpen?0:`-${W}px`,top:0,zIndex:50,transition:"left 0.25s ease"}:{position:"sticky" as any,top:0})}}>
-      <div style={{padding:"20px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
-            <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",borderRadius:"8px",padding:"6px 8px"}}><Zap style={{width:"15px",height:"15px",color:"#fff"}} /></div>
-            <span style={{color:"#fff",fontWeight:"800",fontSize:"15px"}}>PosifyPro</span>
-          </div>
-          {isMobile && <button onClick={()=>setSidebarOpen(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#64748b"}}><X style={{width:"16px",height:"16px"}} /></button>}
-        </div>
-        <div style={{display:"inline-flex",alignItems:"center",gap:"5px",background:"linear-gradient(135deg,#f59e0b,#ef4444)",borderRadius:"99px",padding:"3px 10px",fontSize:"10px",fontWeight:"800",color:"#fff",letterSpacing:"1px"}}>
-          <Shield style={{width:"9px",height:"9px"}} /> SUPER ADMIN
-        </div>
-      </div>
-      <nav style={{flex:1,padding:"12px 10px",display:"flex",flexDirection:"column",gap:"2px"}}>
-        {NAV.map(item=>{
-          const active=tab===item.id;
-          return (
-            <button key={item.id} onClick={()=>{setTab(item.id as AdminTab);setSidebarOpen(false);}} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"9px",border:"none",cursor:"pointer",background:active?"rgba(99,102,241,0.2)":"transparent",color:active?"#a5b4fc":"rgba(255,255,255,0.5)",fontWeight:active?"600":"400",fontSize:"13px",borderLeft:active?"2px solid #6366f1":"2px solid transparent",transition:"all 0.15s",textAlign:"left"}}>
-              <item.icon style={{width:"16px",height:"16px",flexShrink:0}} />
-              {item.l}
-              {item.id==="tenants"&&kpi&&<span style={{marginLeft:"auto",background:"rgba(99,102,241,0.3)",color:"#a5b4fc",borderRadius:"99px",padding:"1px 7px",fontSize:"10px",fontWeight:"700"}}>{kpi.totalTenants}</span>}
-            </button>
-          );
-        })}
-      </nav>
-      <div style={{padding:"12px 10px",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-        <div style={{padding:"8px 12px",marginBottom:"4px"}}>
-          <div style={{fontSize:"11px",color:"rgba(255,255,255,0.3)",marginBottom:"1px"}}>Signed in as</div>
-          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.6)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.email}</div>
-        </div>
-        <button onClick={signOut} style={{display:"flex",alignItems:"center",gap:"8px",width:"100%",padding:"9px 12px",borderRadius:"9px",border:"none",cursor:"pointer",background:"rgba(239,68,68,0.12)",color:"#fca5a5",fontSize:"13px",fontWeight:"600"}}>
-          <LogOut style={{width:"14px",height:"14px"}} /> Sign out
-        </button>
-      </div>
-    </aside>
-  );
+      setStaff(
+        ((staffData as any[]) ?? []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          role: s.role,
+          is_active: s.is_active,
+          org_name: s.organizations?.name ?? null,
+        })),
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-  const topbar=(
-    <div style={{background:"#0f172a",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"0 20px",height:"62px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10,flexShrink:0}}>
-      <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-        <button onClick={()=>setSidebarOpen(o=>!o)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"7px 9px",cursor:"pointer",color:"#fff",display:"flex",alignItems:"center"}}>
-          {sidebarOpen
-            ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          }
-        </button>
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"2px"}}>
-            <span style={{color:"#fff",fontWeight:"800",fontSize:"14px"}}>⚡ PosifyPro</span>
-            <span style={{background:"linear-gradient(135deg,#f59e0b,#ef4444)",borderRadius:"99px",padding:"1px 8px",fontSize:"9px",fontWeight:"800",color:"#fff"}}>SUPER ADMIN</span>
-          </div>
-          <div style={{fontSize:"10px",color:"rgba(255,255,255,0.35)",display:"flex",gap:"4px"}}>
-            <span>{new Date().toLocaleDateString("en-KE",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</span>
-            <span>·</span>
-            <span>{new Date().toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"})}</span>
-            <span>·</span>
-            <span style={{color:"#a5b4fc",fontWeight:"600"}}>{NAV.find(s=>s.id===tab)?.l}</span>
-          </div>
-        </div>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-        <div style={{background:"rgba(16,185,129,0.15)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:"8px",padding:"5px 11px",display:"flex",alignItems:"center",gap:"5px",fontSize:"11px",fontWeight:"600",color:"#34d399"}}>
-          <span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34d399",display:"inline-block"}} />
-          {kpi?.activeTenants??0} live
-        </div>
-        <button onClick={()=>{setRefreshing(true);load();}} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"7px 9px",cursor:"pointer",color:"#94a3b8",display:"flex"}}>
-          <RefreshCw style={{width:"14px",height:"14px",animation:refreshing?"spin 1s linear infinite":"none"}} />
-        </button>
-      </div>
-    </div>
-  );
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleSignOut = async () => {
+    await doSignOut();
+    navigate({ to: "/login" });
+  };
+
+  const togglePlan = async (org: OrgRow, plan: Plan) => {
+    const { error } = await supabase
+      .from("organizations")
+      .update({ license_status: planToStatus(plan) } as any)
+      .eq("id", org.id);
+    if (error) return toast.error(error.message);
+    toast.success(`${org.name} → ${plan.toUpperCase()}`);
+    load();
+  };
+
+  const toggleStatus = async (org: OrgRow) => {
+    const next = org.is_active ? "expired" : "active";
+    const { error } = await supabase
+      .from("organizations")
+      .update({ license_status: next } as any)
+      .eq("id", org.id);
+    if (error) return toast.error(error.message);
+    toast.success(org.is_active ? "Suspended" : "Activated");
+    load();
+  };
+
+  const kpis = useMemo(() => {
+    const total = orgs.length;
+    const active = orgs.filter((o) => o.is_active).length;
+    const suspended = total - active;
+    const pro = orgs.filter((o) => o.plan === "pro").length;
+    const basic = orgs.filter((o) => o.plan === "basic").length;
+    const ms = new Date();
+    ms.setDate(1);
+    const newThisMonth = orgs.filter((o) => new Date(o.created_at) >= ms).length;
+    return { total, active, suspended, pro, basic, newThisMonth, staff: staff.length };
+  }, [orgs, staff.length]);
+
+  const filteredOrgs = orgs.filter((o) => {
+    const q = search.toLowerCase();
+    const matchQ =
+      !q || o.name.toLowerCase().includes(q) || o.owner_email.toLowerCase().includes(q);
+    const matchPlan = planFilter === "all" || o.plan === planFilter;
+    const matchStatus =
+      statusFilter === "all" ||
+      (statusFilter === "active" ? o.is_active : !o.is_active);
+    return matchQ && matchPlan && matchStatus;
+  });
+
+  const filteredStaff = staff.filter((s) => {
+    const q = staffSearch.toLowerCase();
+    return (
+      !q ||
+      s.name?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q) ||
+      s.org_name?.toLowerCase().includes(q)
+    );
+  });
+
+  const navItems = [
+    { id: "overview" as const, label: "Overview", icon: LayoutDashboard },
+    { id: "businesses" as const, label: "Businesses", icon: Building2 },
+    { id: "staff" as const, label: "All Staff", icon: Users },
+  ];
 
   return (
-    <div style={{display:"flex",minHeight:"100vh",background:"#f8fafc",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
-      {sidebarOpen && <div onClick={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:40}} />}
-      {sidebar}
-      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column"}}>
-        {topbar}
-        <div style={{flex:1,padding:"24px",overflowY:"auto"}}>
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full bg-muted/30">
+        <Sidebar collapsible="icon">
+          <SidebarHeader className="border-b">
+            <div className="flex items-center gap-2 px-2 py-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+                <span className="text-sm font-bold">PosifyPro</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600">
+                  Super Admin
+                </span>
+              </div>
+            </div>
+          </SidebarHeader>
 
-          {tab==="overview" && (
-            <div style={{display:"flex",flexDirection:"column",gap:"22px"}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:"12px"}}>
-                <KCard label="Total Businesses" value={String(kpi?.totalTenants??0)} icon={Building2} color="#6366f1" trend={kpi?.tenantGrowth} sub={`${kpi?.newThisMonth??0} new this month`} loading={loading} />
-                <KCard label="Active" value={String(kpi?.activeTenants??0)} icon={CheckCircle2} color="#10b981" sub={`${kpi&&kpi.totalTenants?Math.round((kpi.activeTenants/kpi.totalTenants)*100):0}% of total`} loading={loading} />
-                <KCard label="Suspended" value={String(kpi?.suspendedTenants??0)} icon={AlertTriangle} color="#ef4444" loading={loading} />
-                <KCard label="Total Staff" value={String(kpi?.totalStaff??0)} icon={Users} color="#8b5cf6" sub="All businesses" loading={loading} />
-                <KCard label="Pro Businesses" value={String(kpi?.proTenants??0)} icon={Crown} color="#f59e0b" sub={`${kpi?.basicTenants??0} on Basic`} loading={loading} />
-                <KCard label="New This Month" value={String(kpi?.newThisMonth??0)} icon={TrendingUp} color="#3b82f6" trend={kpi?.tenantGrowth} loading={loading} />
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 300px",gap:"16px"}}>
-                <div style={{background:"#fff",borderRadius:"14px",padding:"20px",border:"1px solid #f1f5f9"}}>
-                  <h3 style={{margin:"0 0 4px",fontWeight:"700",fontSize:"13px",color:"#0f172a"}}>Business Growth</h3>
-                  <p style={{margin:"0 0 16px",fontSize:"11px",color:"#94a3b8"}}>Cumulative — last 6 months</p>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <AreaChart data={gd}>
-                      <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient></defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                      <XAxis dataKey="month" tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false}/>
-                      <Tooltip content={<CT />}/>
-                      <Area type="monotone" dataKey="tenants" stroke="#6366f1" strokeWidth={2.5} fill="url(#g1)" name="Businesses"/>
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={{background:"#fff",borderRadius:"14px",padding:"20px",border:"1px solid #f1f5f9"}}>
-                  <h3 style={{margin:"0 0 4px",fontWeight:"700",fontSize:"13px",color:"#0f172a"}}>New Signups / Month</h3>
-                  <p style={{margin:"0 0 16px",fontSize:"11px",color:"#94a3b8"}}>Businesses joined per month</p>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={gd.map((d,i,a)=>({month:d.month,new:i===0?d.tenants:d.tenants-a[i-1].tenants}))} barSize={24}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                      <XAxis dataKey="month" tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false} allowDecimals={false}/>
-                      <Tooltip content={<CT />}/>
-                      <Bar dataKey="new" fill="#10b981" radius={[4,4,0,0]} name="New"/>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={{background:"#fff",borderRadius:"14px",padding:"20px",border:"1px solid #f1f5f9"}}>
-                  <h3 style={{margin:"0 0 4px",fontWeight:"700",fontSize:"13px",color:"#0f172a"}}>Plan Split</h3>
-                  <p style={{margin:"0 0 12px",fontSize:"11px",color:"#94a3b8"}}>Subscription distribution</p>
-                  <ResponsiveContainer width="100%" height={120}>
-                    <PieChart><Pie data={pd} cx="50%" cy="50%" innerRadius={38} outerRadius={55} paddingAngle={3} dataKey="value">{pd.map((_,i)=><Cell key={i} fill={PCOLS[i]}/>)}</Pie><Tooltip/></PieChart>
-                  </ResponsiveContainer>
-                  <div style={{display:"flex",flexDirection:"column",gap:"6px",marginTop:"8px"}}>
-                    {pd.map((p,i)=>(
-                      <div key={p.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
-                          <span style={{width:"8px",height:"8px",borderRadius:"2px",background:PCOLS[i],display:"inline-block"}}/>
-                          <span style={{fontSize:"12px",color:"#64748b"}}>{p.name}</span>
-                        </div>
-                        <span style={{fontSize:"12px",fontWeight:"700",color:"#0f172a"}}>{p.value} ({kpi?.totalTenants?Math.round((p.value/kpi.totalTenants)*100):0}%)</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div style={{background:"#fff",borderRadius:"14px",padding:"20px",border:"1px solid #f1f5f9"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
-                  <h3 style={{margin:0,fontWeight:"700",fontSize:"13px",color:"#0f172a"}}>Recently Joined</h3>
-                  <button onClick={()=>setTab("tenants")} style={{display:"flex",alignItems:"center",gap:"3px",fontSize:"12px",color:"#6366f1",fontWeight:"600",background:"none",border:"none",cursor:"pointer"}}>
-                    View all <ChevronRight style={{width:"13px",height:"13px"}}/>
-                  </button>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:"10px"}}>
-                  {tenants.slice(0,6).map(t=>(
-                    <div key={t.id} onClick={()=>{setSel(t);setTab("tenants");}} style={{border:"1px solid #f1f5f9",borderRadius:"12px",padding:"14px",cursor:"pointer",transition:"all 0.15s"}} onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor="#c7d2fe";}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor="#f1f5f9";}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
-                        <div style={{width:"34px",height:"34px",borderRadius:"9px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:"800",fontSize:"14px"}}>{t.name.charAt(0).toUpperCase()}</div>
-                        <Badge plan={t.plan}/>
-                      </div>
-                      <div style={{fontWeight:"700",fontSize:"13px",color:"#0f172a"}}>{t.name}</div>
-                      <div style={{fontSize:"11px",color:"#94a3b8",marginBottom:"8px"}}>{t.email}</div>
-                      <div style={{display:"flex",gap:"12px",fontSize:"11px",color:"#64748b"}}>
-                        <span>👥 {t.staff_count}</span><span>🧾 {t.order_count}</span>
-                      </div>
-                    </div>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>Manage</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navItems.map((item) => (
+                    <SidebarMenuItem key={item.id}>
+                      <SidebarMenuButton
+                        isActive={tab === item.id}
+                        onClick={() => setTab(item.id)}
+                        tooltip={item.label}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
                   ))}
-                </div>
-              </div>
-            </div>
-          )}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-          {tab==="tenants" && (
-            <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-              <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
-                <div style={{position:"relative",flex:1,minWidth:"200px"}}>
-                  <Search style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",width:"14px",height:"14px",color:"#94a3b8"}}/>
-                  <input placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:"100%",padding:"8px 12px 8px 32px",borderRadius:"9px",border:"1.5px solid #e2e8f0",fontSize:"13px",outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                </div>
-                {(["all","free","basic","pro"] as const).map(p=>(
-                  <button key={p} onClick={()=>setFp(p)} style={{padding:"7px 13px",borderRadius:"99px",border:"1.5px solid",borderColor:fp===p?"#6366f1":"#e2e8f0",background:fp===p?"#6366f1":"#fff",color:fp===p?"#fff":"#64748b",fontSize:"12px",fontWeight:"600",cursor:"pointer",textTransform:"capitalize"}}>{p==="all"?"All Plans":p}</button>
-                ))}
-                {(["all","active","suspended"] as const).map(s=>(
-                  <button key={s} onClick={()=>setFs(s)} style={{padding:"7px 13px",borderRadius:"99px",border:"1.5px solid",borderColor:fs===s?"#0f172a":"#e2e8f0",background:fs===s?"#0f172a":"#fff",color:fs===s?"#fff":"#64748b",fontSize:"12px",fontWeight:"600",cursor:"pointer",textTransform:"capitalize"}}>{s==="all"?"All Status":s}</button>
-                ))}
-                <select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} style={{padding:"7px 11px",borderRadius:"9px",border:"1.5px solid #e2e8f0",fontSize:"12px",color:"#64748b",background:"#fff",outline:"none"}}>
-                  <option value="newest">Newest first</option>
-                  <option value="staff">Most staff</option>
-                  <option value="orders">Most orders</option>
-                </select>
-              </div>
-              <div style={{background:"#fff",borderRadius:"14px",border:"1px solid #f1f5f9",overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 70px 80px 110px 100px",padding:"11px 20px",background:"#f8fafc",borderBottom:"1px solid #f1f5f9",fontSize:"10px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                  <span>Business</span><span>Contact</span><span>Staff</span><span>Orders</span><span>Plan</span><span>Status</span>
-                </div>
-                {loading ? <div style={{padding:"40px",textAlign:"center",color:"#94a3b8"}}>Loading…</div>
-                : filtered.length===0 ? <div style={{padding:"50px",textAlign:"center",color:"#94a3b8"}}>No businesses found</div>
-                : filtered.map((t,i)=>(
-                  <div key={t.id} onClick={()=>setSel(sel?.id===t.id?null:t)} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 70px 80px 110px 100px",padding:"13px 20px",cursor:"pointer",alignItems:"center",borderBottom:i<filtered.length-1?"1px solid #f8fafc":"none",background:sel?.id===t.id?"#f5f3ff":"transparent",transition:"background 0.1s",opacity:t.is_active?1:0.6}} onMouseEnter={e=>{if(sel?.id!==t.id)(e.currentTarget as HTMLElement).style.background="#f8fafc";}} onMouseLeave={e=>{if(sel?.id!==t.id)(e.currentTarget as HTMLElement).style.background="transparent";}}>
-                    <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                      <div style={{width:"32px",height:"32px",borderRadius:"8px",flexShrink:0,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:"800",fontSize:"12px"}}>{t.name.charAt(0).toUpperCase()}</div>
-                      <div><div style={{fontWeight:"600",fontSize:"13px",color:"#0f172a"}}>{t.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>/{t.slug}</div></div>
-                    </div>
-                    <div style={{fontSize:"12px",color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.email}</div>
-                    <div style={{fontSize:"13px",fontWeight:"600",color:"#0f172a"}}>{t.staff_count}</div>
-                    <div style={{fontSize:"13px",fontWeight:"600",color:"#0f172a"}}>{t.order_count}</div>
-                    <Badge plan={t.plan}/>
-                    <div style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"11px",fontWeight:"600",color:t.is_active?"#10b981":"#ef4444"}}>
-                      <span style={{width:"6px",height:"6px",borderRadius:"50%",background:t.is_active?"#10b981":"#ef4444",display:"inline-block"}}/>
-                      {t.is_active?"Active":"Suspended"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {sel && (
-                <div style={{background:"#fff",borderRadius:"14px",border:"1px solid #e0e7ff",padding:"20px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-                      <div style={{width:"42px",height:"42px",borderRadius:"11px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:"800",fontSize:"17px"}}>{sel.name.charAt(0)}</div>
-                      <div><div style={{fontWeight:"800",fontSize:"15px",color:"#0f172a"}}>{sel.name}</div><div style={{fontSize:"12px",color:"#94a3b8"}}>{sel.email}</div></div>
-                    </div>
-                    <button onClick={()=>setSel(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#94a3b8"}}><X style={{width:"17px",height:"17px"}}/></button>
-                  </div>
-                  <div style={{display:"flex",gap:"12px",marginBottom:"18px",flexWrap:"wrap"}}>
-                    {[{l:"Staff",v:sel.staff_count,e:"👥"},{l:"Orders",v:sel.order_count,e:"🧾"},{l:"Currency",v:sel.currency,e:"🌍"},{l:"Slug",v:`/${sel.slug}`,e:"🔗"}].map(s=>(
-                      <div key={s.l} style={{background:"#f8fafc",borderRadius:"10px",padding:"11px 15px",flex:1,minWidth:"90px"}}>
-                        <div style={{fontSize:"16px",marginBottom:"3px"}}>{s.e}</div>
-                        <div style={{fontWeight:"700",fontSize:"15px",color:"#0f172a"}}>{s.v}</div>
-                        <div style={{fontSize:"10px",color:"#94a3b8"}}>{s.l}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
-                    <span style={{fontSize:"12px",fontWeight:"600",color:"#64748b"}}>Change Plan:</span>
-                    {(["free","basic","pro"] as const).map(p=>(
-                      <button key={p} onClick={()=>changePlan(sel,p)} disabled={al||sel.plan===p} style={{padding:"7px 15px",borderRadius:"8px",border:"none",fontWeight:"600",fontSize:"12px",cursor:"pointer",background:sel.plan===p?PC[p].c:PC[p].bg,color:sel.plan===p?"#fff":PC[p].c,opacity:al?0.6:1,textTransform:"capitalize"}}>{sel.plan===p?`✓ ${p}`:p}</button>
-                    ))}
-                    <div style={{flex:1}}/>
-                    <button onClick={()=>toggleStatus(sel)} disabled={al} style={{padding:"8px 18px",borderRadius:"8px",border:"none",fontWeight:"600",fontSize:"13px",cursor:"pointer",background:sel.is_active?"#fef2f2":"#f0fdf4",color:sel.is_active?"#ef4444":"#16a34a",opacity:al?0.6:1,display:"flex",alignItems:"center",gap:"6px"}}>
-                      {sel.is_active?<><XCircle style={{width:"13px",height:"13px"}}/>Suspend</>:<><CheckCircle2 style={{width:"13px",height:"13px"}}/>Activate</>}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            <SidebarGroup>
+              <SidebarGroupLabel>Shortcuts</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="My Business">
+                      <Link to="/dashboard" className="flex items-center gap-2">
+                        <LayoutDashboard className="h-4 w-4" />
+                        <span>My Business</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
 
-          {tab==="analytics" && (
-            <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-              <div style={{background:"#fff",borderRadius:"14px",padding:"22px",border:"1px solid #f1f5f9"}}>
-                <h3 style={{margin:"0 0 4px",fontWeight:"700",fontSize:"14px",color:"#0f172a"}}>Business Growth Trend</h3>
-                <p style={{margin:"0 0 18px",fontSize:"12px",color:"#94a3b8"}}>Cumulative businesses — last 6 months</p>
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={gd}>
-                    <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.12}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient></defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                    <XAxis dataKey="month" tick={{fontSize:11,fill:"#94a3b8"}} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fontSize:11,fill:"#94a3b8"}} axisLine={false} tickLine={false} allowDecimals={false}/>
-                    <Tooltip content={<CT />}/>
-                    <Area type="monotone" dataKey="tenants" stroke="#6366f1" strokeWidth={2.5} fill="url(#g2)" name="Businesses"/>
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px"}}>
-                <div style={{background:"#fff",borderRadius:"14px",padding:"20px",border:"1px solid #f1f5f9"}}>
-                  <h3 style={{margin:"0 0 16px",fontWeight:"700",fontSize:"13px",color:"#0f172a"}}>Top Businesses by Orders</h3>
-                  {[...tenants].sort((a,b)=>(b.order_count??0)-(a.order_count??0)).slice(0,6).map((t,i)=>{
-                    const mx=tenants[0]?.order_count??1;
-                    const pct=mx>0?Math.round(((t.order_count??0)/mx)*100):0;
-                    return (
-                      <div key={t.id} style={{marginBottom:"12px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
-                            <span style={{fontSize:"11px",color:"#94a3b8",width:"14px"}}>#{i+1}</span>
-                            <span style={{fontSize:"13px",fontWeight:"600",color:"#0f172a"}}>{t.name}</span>
-                            <Badge plan={t.plan}/>
+          <SidebarFooter className="border-t">
+            <div className="px-2 py-2 group-data-[collapsible=icon]:hidden">
+              <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+            </div>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={handleSignOut} tooltip="Sign out">
+                  <LogOut className="h-4 w-4" />
+                  <span>Sign out</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </Sidebar>
+
+        <SidebarInset className="flex flex-1 flex-col">
+          <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background px-4">
+            <SidebarTrigger />
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-amber-600" />
+              <h1 className="text-sm font-semibold">
+                Super Admin · {navItems.find((n) => n.id === tab)?.label}
+              </h1>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Badge variant="outline" className="hidden sm:inline-flex">
+                {kpis.active} active
+              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => load()}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </header>
+
+          <main className="flex-1 space-y-6 p-4 md:p-6">
+            {tab === "overview" && (
+              <>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <KCard label="Total Businesses" value={kpis.total} icon={Building2} tone="indigo" />
+                  <KCard label="Active" value={kpis.active} icon={CheckCircle2} tone="emerald" />
+                  <KCard label="Suspended" value={kpis.suspended} icon={XCircle} tone="rose" />
+                  <KCard label="Pro Plans" value={kpis.pro} icon={Crown} tone="amber" />
+                  <KCard label="Basic Plans" value={kpis.basic} icon={Sparkles} tone="blue" />
+                  <KCard label="Total Staff" value={kpis.staff} icon={Users} tone="violet" />
+                  <KCard label="New (Month)" value={kpis.newThisMonth} icon={Building2} tone="emerald" />
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Recent Businesses</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loading ? (
+                      <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+                    ) : orgs.length === 0 ? (
+                      <p className="py-8 text-center text-sm text-muted-foreground">No businesses yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {orgs.slice(0, 6).map((o) => (
+                          <div
+                            key={o.id}
+                            className="flex items-center justify-between rounded-lg border bg-card p-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white">
+                                {o.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">{o.name}</p>
+                                <p className="truncate text-xs text-muted-foreground">{o.owner_email}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={planBadge(o.plan)}>
+                                {o.plan.toUpperCase()}
+                              </Badge>
+                              <Badge variant={o.is_active ? "default" : "destructive"}>
+                                {o.is_active ? "Active" : "Suspended"}
+                              </Badge>
+                            </div>
                           </div>
-                          <span style={{fontSize:"12px",fontWeight:"700",color:"#0f172a"}}>{t.order_count} orders</span>
-                        </div>
-                        <div style={{background:"#f1f5f9",borderRadius:"99px",height:"5px"}}>
-                          <div style={{width:`${pct}%`,height:"5px",borderRadius:"99px",background:"linear-gradient(90deg,#6366f1,#8b5cf6)"}}/>
-                        </div>
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",alignContent:"start"}}>
-                  {[{l:"Avg Staff/Business",v:kpi&&kpi.totalTenants>0?(kpi.totalStaff/kpi.totalTenants).toFixed(1):"0"},{l:"Paid Conversion",v:`${kpi&&kpi.totalTenants>0?Math.round(((kpi.proTenants+kpi.basicTenants)/kpi.totalTenants)*100):0}%`},{l:"Suspension Rate",v:`${kpi&&kpi.totalTenants>0?Math.round((kpi.suspendedTenants/kpi.totalTenants)*100):0}%`},{l:"Pro Rate",v:`${kpi&&kpi.totalTenants>0?Math.round((kpi.proTenants/kpi.totalTenants)*100):0}%`}].map(s=>(
-                    <div key={s.l} style={{background:"#fff",borderRadius:"12px",padding:"16px",border:"1px solid #f1f5f9"}}>
-                      <div style={{fontSize:"22px",fontWeight:"800",color:"#0f172a"}}>{s.v}</div>
-                      <div style={{fontSize:"11px",color:"#94a3b8",marginTop:"4px"}}>{s.l}</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {tab === "businesses" && (
+              <Card>
+                <CardHeader className="space-y-3">
+                  <CardTitle className="text-base">All Businesses ({filteredOrgs.length})</CardTitle>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name or owner email…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-9"
+                      />
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab==="staff" && (
-            <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-              <div style={{position:"relative",maxWidth:"360px"}}>
-                <Search style={{position:"absolute",left:"10px",top:"50%",transform:"translateY(-50%)",width:"14px",height:"14px",color:"#94a3b8"}}/>
-                <input placeholder="Search staff..." value={ss} onChange={e=>setSs(e.target.value)} style={{width:"100%",padding:"8px 12px 8px 32px",borderRadius:"9px",border:"1.5px solid #e2e8f0",fontSize:"13px",outline:"none",boxSizing:"border-box"}}/>
-              </div>
-              <div style={{background:"#fff",borderRadius:"14px",border:"1px solid #f1f5f9",overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 120px 120px",padding:"11px 20px",background:"#f8fafc",borderBottom:"1px solid #f1f5f9",fontSize:"10px",fontWeight:"700",color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                  <span>Staff Member</span><span>Business</span><span>Role</span><span>Status</span>
-                </div>
-                {fstaff.length===0 ? <div style={{padding:"50px",textAlign:"center",color:"#94a3b8"}}>No staff found</div>
-                : fstaff.map((s,i)=>{
-                  const rc=RC[s.role]??RC.cashier;
-                  const RI=rc.icon;
-                  return (
-                    <div key={s.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 120px 120px",padding:"12px 20px",alignItems:"center",borderBottom:i<fstaff.length-1?"1px solid #f8fafc":"none"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                        <div style={{width:"32px",height:"32px",borderRadius:"99px",background:rc.bg,display:"flex",alignItems:"center",justifyContent:"center",color:rc.color,fontWeight:"800",fontSize:"12px"}}>{s.name?.charAt(0)?.toUpperCase()??"?"}</div>
-                        <div><div style={{fontWeight:"600",fontSize:"13px",color:"#0f172a"}}>{s.name}</div><div style={{fontSize:"11px",color:"#94a3b8"}}>{s.email}</div></div>
-                      </div>
-                      <div style={{fontSize:"12px",color:"#64748b"}}>{(s.organizations as any)?.name??"—"}</div>
-                      <span style={{display:"inline-flex",alignItems:"center",gap:"5px",background:rc.bg,color:rc.color,padding:"3px 9px",borderRadius:"99px",fontSize:"11px",fontWeight:"700"}}>
-                        <RI style={{width:"10px",height:"10px"}}/>
-                        {s.role?.charAt(0).toUpperCase()+s.role?.slice(1)}
-                      </span>
-                      <div style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"11px",fontWeight:"600",color:s.is_active?"#10b981":"#ef4444"}}>
-                        <span style={{width:"6px",height:"6px",borderRadius:"50%",background:s.is_active?"#10b981":"#ef4444",display:"inline-block"}}/>
-                        {s.is_active?"Active":"Suspended"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {tab==="licenses" && <LicenseManager adminId={user?.id??""}/>}
-
-          {tab==="activity" && (
-            <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-              <div style={{background:"#fff",borderRadius:"14px",padding:"22px",border:"1px solid #f1f5f9"}}>
-                <h3 style={{margin:"0 0 16px",fontWeight:"700",fontSize:"14px",color:"#0f172a"}}>Recent Business Signups</h3>
-                {tenants.slice(0,15).map((t,i)=>(
-                  <div key={t.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 0",borderBottom:i<14?"1px solid #f8fafc":"none"}}>
-                    <div style={{width:"36px",height:"36px",borderRadius:"9px",flexShrink:0,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:"800",fontSize:"13px"}}>{t.name.charAt(0).toUpperCase()}</div>
-                    <div style={{flex:1}}><div style={{fontSize:"13px",fontWeight:"600",color:"#0f172a"}}><strong>{t.name}</strong> joined PosifyPro</div><div style={{fontSize:"11px",color:"#94a3b8"}}>{t.email}</div></div>
-                    <Badge plan={t.plan}/>
-                    <div style={{fontSize:"11px",color:"#94a3b8",whiteSpace:"nowrap"}}>{new Date(t.created_at).toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"})}</div>
+                    <Select value={planFilter} onValueChange={(v) => setPlanFilter(v as PlanFilter)}>
+                      <SelectTrigger className="w-full sm:w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All plans</SelectItem>
+                        <SelectItem value="free">Free</SelectItem>
+                        <SelectItem value="basic">Basic</SelectItem>
+                        <SelectItem value="pro">Pro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+                    >
+                      <SelectTrigger className="w-full sm:w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All status</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="suspended">Suspended</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                ))}
-                {tenants.length===0 && <div style={{padding:"40px",textAlign:"center",color:"#94a3b8"}}>No activity yet</div>}
-              </div>
-            </div>
-          )}
+                </CardHeader>
+                <CardContent className="overflow-x-auto p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Business</TableHead>
+                        <TableHead className="hidden md:table-cell">Owner</TableHead>
+                        <TableHead className="text-right hidden sm:table-cell">Staff</TableHead>
+                        <TableHead className="text-right hidden sm:table-cell">Sales</TableHead>
+                        <TableHead>Plan</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                            Loading…
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredOrgs.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                            No businesses match the filters.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredOrgs.map((o) => (
+                          <TableRow key={o.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white">
+                                  {o.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">{o.name}</p>
+                                  <p className="text-xs text-muted-foreground md:hidden">
+                                    {o.owner_email}
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm">
+                              {o.owner_email}
+                            </TableCell>
+                            <TableCell className="text-right hidden sm:table-cell">
+                              {o.staff_count}
+                            </TableCell>
+                            <TableCell className="text-right hidden sm:table-cell">
+                              {o.sales_count}
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={o.plan}
+                                onValueChange={(v) => togglePlan(o, v as Plan)}
+                              >
+                                <SelectTrigger className="h-8 w-[90px] text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="free">Free</SelectItem>
+                                  <SelectItem value="basic">Basic</SelectItem>
+                                  <SelectItem value="pro">Pro</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant={o.is_active ? "destructive" : "default"}
+                                onClick={() => toggleStatus(o)}
+                              >
+                                {o.is_active ? "Suspend" : "Activate"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
 
-          {tab==="settings" && (
-            <div style={{display:"flex",flexDirection:"column",gap:"16px",maxWidth:"540px"}}>
-              <div style={{background:"#fff",borderRadius:"14px",padding:"24px",border:"1px solid #f1f5f9"}}>
-                <h3 style={{margin:"0 0 18px",fontWeight:"700",fontSize:"14px",color:"#0f172a"}}>Admin Account</h3>
-                {[{l:"Email",v:user?.email??"—"},{l:"Role",v:"Super Admin"},{l:"Platform",v:"PosifyPro v2.0"}].map(r=>(
-                  <div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"10px 14px",background:"#f8fafc",borderRadius:"9px",marginBottom:"8px"}}>
-                    <span style={{fontSize:"13px",color:"#64748b"}}>{r.l}</span>
-                    <span style={{fontSize:"13px",fontWeight:"600",color:"#0f172a"}}>{r.v}</span>
+            {tab === "staff" && (
+              <Card>
+                <CardHeader className="space-y-3">
+                  <CardTitle className="text-base">All Staff ({filteredStaff.length})</CardTitle>
+                  <div className="relative max-w-sm">
+                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Search staff…"
+                      value={staffSearch}
+                      onChange={(e) => setStaffSearch(e.target.value)}
+                      className="pl-9"
+                    />
                   </div>
-                ))}
-              </div>
-              <div style={{background:"#fff",borderRadius:"14px",padding:"24px",border:"1px solid #f1f5f9"}}>
-                <h3 style={{margin:"0 0 18px",fontWeight:"700",fontSize:"14px",color:"#0f172a"}}>Platform Stats</h3>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
-                  {[{l:"Total Businesses",v:kpi?.totalTenants??0},{l:"Active",v:kpi?.activeTenants??0},{l:"Total Staff",v:kpi?.totalStaff??0},{l:"Pro Subscribers",v:kpi?.proTenants??0}].map(s=>(
-                    <div key={s.l} style={{background:"#f8fafc",borderRadius:"9px",padding:"14px"}}>
-                      <div style={{fontSize:"20px",fontWeight:"800",color:"#0f172a"}}>{s.v}</div>
-                      <div style={{fontSize:"11px",color:"#94a3b8",marginTop:"2px"}}>{s.l}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <button onClick={signOut} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",padding:"12px",borderRadius:"10px",border:"none",cursor:"pointer",background:"#fef2f2",color:"#ef4444",fontWeight:"700",fontSize:"14px"}}>
-                <LogOut style={{width:"16px",height:"16px"}}/> Sign out of Admin
-              </button>
-            </div>
-          )}
-
-        </div>
+                </CardHeader>
+                <CardContent className="overflow-x-auto p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead className="hidden md:table-cell">Email</TableHead>
+                        <TableHead>Business</TableHead>
+                        <TableHead>Role</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredStaff.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
+                            No staff found.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredStaff.map((s) => (
+                          <TableRow key={s.id}>
+                            <TableCell>
+                              <p className="text-sm font-medium">{s.name ?? "—"}</p>
+                              <p className="text-xs text-muted-foreground md:hidden">{s.email}</p>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-sm">{s.email}</TableCell>
+                            <TableCell className="text-sm">{s.org_name ?? "—"}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize">
+                                {s.role ?? "—"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </main>
+        </SidebarInset>
       </div>
+    </SidebarProvider>
+  );
+}
 
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+function KCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  icon: any;
+  tone: "indigo" | "emerald" | "rose" | "amber" | "blue" | "violet";
+}) {
+  const toneClass: Record<string, string> = {
+    indigo: "bg-indigo-100 text-indigo-700",
+    emerald: "bg-emerald-100 text-emerald-700",
+    rose: "bg-rose-100 text-rose-700",
+    amber: "bg-amber-100 text-amber-700",
+    blue: "bg-blue-100 text-blue-700",
+    violet: "bg-violet-100 text-violet-700",
+  };
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 p-4">
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${toneClass[tone]}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-2xl font-bold leading-tight">{value}</p>
+          <p className="truncate text-xs text-muted-foreground">{label}</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
