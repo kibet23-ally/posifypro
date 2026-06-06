@@ -2,14 +2,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ShoppingBag } from "lucide-react";
-import { signIn, resetPassword } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { ShoppingBag, Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
@@ -19,34 +18,48 @@ function LoginPage() {
   const [mode, setMode] = useState<"signin" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
+  // If already logged in, redirect based on role
   useEffect(() => {
-    if (!loading && user) {
-      // Check if super admin → redirect to /admin
-      supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (data?.role === 'super_admin') {
-            navigate({ to: '/admin', replace: true })
-          } else {
-            navigate({ to: '/dashboard', replace: true })
-          }
-        })
-    }
+    if (loading || !user) return;
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.role === "super_admin") {
+          navigate({ to: "/admin", replace: true });
+        } else {
+          navigate({ to: "/dashboard", replace: true });
+        }
+      });
   }, [user, loading, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password) { toast.error("Enter your email and password"); return; }
     setBusy(true);
     try {
-      await signIn(email, password);
-      toast.success("Welcome back!");
-      // redirect handled by useEffect above
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (!data.user) throw new Error("Login failed");
+
+      // Check role and redirect
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
+      if (profile?.role === "super_admin") {
+        navigate({ to: "/admin", replace: true });
+      } else {
+        navigate({ to: "/dashboard", replace: true });
+      }
     } catch (err: any) {
       toast.error(err.message ?? "Invalid email or password");
     } finally {
@@ -59,7 +72,10 @@ function LoginPage() {
     if (!email) { toast.error("Enter your email address"); return; }
     setBusy(true);
     try {
-      await resetPassword(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
       setResetSent(true);
     } catch (err: any) {
       toast.error(err.message ?? "Could not send reset email");
@@ -68,25 +84,30 @@ function LoginPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="size-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
-      {/* Left panel — desktop only */}
+      {/* Left panel — desktop */}
       <div className="hidden lg:flex flex-col justify-between p-12 bg-sidebar text-sidebar-foreground">
         <Link to="/" className="flex items-center gap-2 text-xl font-semibold">
-          <ShoppingBag className="size-6 text-primary" />
-          PosifyPro
+          <ShoppingBag className="size-6 text-primary" /> PosifyPro
         </Link>
         <div>
           <h1 className="text-4xl font-bold leading-tight">
             The smart POS<br />for modern businesses.
           </h1>
           <p className="mt-4 text-sidebar-foreground/70 max-w-md">
-            Multi-tenant. Real-time. Built for Africa.
+            Multi-tenant · Real-time · Built for Africa.
           </p>
         </div>
-        <div className="text-xs text-sidebar-foreground/50">
-          © {new Date().getFullYear()} PosifyPro
-        </div>
+        <p className="text-xs text-sidebar-foreground/50">© {new Date().getFullYear()} PosifyPro</p>
       </div>
 
       {/* Right panel */}
@@ -101,7 +122,7 @@ function LoginPage() {
               <div className="text-5xl mb-4">📧</div>
               <h2 className="text-xl font-semibold mb-2">Check your email</h2>
               <p className="text-sm text-muted-foreground mb-6">
-                We sent a password reset link to <strong>{email}</strong>
+                Password reset link sent to <strong>{email}</strong>
               </p>
               <button
                 onClick={() => { setMode("signin"); setResetSent(false); }}
@@ -116,21 +137,16 @@ function LoginPage() {
                 {mode === "signin" ? "Sign in" : "Reset password"}
               </h2>
               <p className="text-sm text-muted-foreground mt-1 mb-6">
-                {mode === "signin"
-                  ? "Welcome back to PosifyPro."
-                  : "We'll send you a reset link."}
+                {mode === "signin" ? "Welcome back to PosifyPro." : "We'll send you a reset link."}
               </p>
 
               <form onSubmit={mode === "signin" ? handleSignIn : handleReset} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="jane@mybusiness.com"
-                    required
+                    id="email" type="email" value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@business.com" required autoComplete="email"
                   />
                 </div>
 
@@ -138,39 +154,38 @@ function LoginPage() {
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center">
                       <Label htmlFor="password">Password</Label>
-                      <button
-                        type="button"
-                        onClick={() => setMode("reset")}
-                        className="text-xs text-primary hover:underline"
-                      >
+                      <button type="button" onClick={() => setMode("reset")} className="text-xs text-primary hover:underline">
                         Forgot password?
                       </button>
                     </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPwd ? "text" : "password"}
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        required minLength={6}
+                        autoComplete="current-password"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPwd(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 <Button type="submit" disabled={busy} className="w-full">
-                  {busy
-                    ? "Please wait…"
-                    : mode === "signin"
-                    ? "Sign in"
-                    : "Send Reset Link"}
+                  {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Send Reset Link"}
                 </Button>
               </form>
 
               {mode === "reset" ? (
-                <button
-                  onClick={() => setMode("signin")}
-                  className="mt-4 text-sm text-muted-foreground hover:text-foreground w-full text-center"
-                >
+                <button onClick={() => setMode("signin")} className="mt-4 text-sm text-muted-foreground hover:text-foreground w-full text-center">
                   ← Back to sign in
                 </button>
               ) : (
