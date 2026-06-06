@@ -5,24 +5,26 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
+    // Check auth session
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       throw redirect({ to: "/login" });
     }
 
-    const { data: profile } = await supabase
+    // Check role — must be super_admin
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", session.user.id)
       .single();
 
-    if (profile?.role !== "super_admin") {
+    if (error || !profile) {
+      throw redirect({ to: "/login" });
+    }
+
+    if (profile.role !== "super_admin") {
       throw redirect({ to: "/dashboard" });
     }
   },
-
   component: SuperAdminDashboard,
 });
