@@ -33,7 +33,7 @@ function AppLayout() {
   const [businessName, setBusinessName] = useState<string | null>(null);
   const [roleChecked, setRoleChecked] = useState(false);
 
-  // ── Redirect super admin away from _app layout ──────────
+  // ── Check role: redirect super admin to /admin ──
   useEffect(() => {
     if (loading || !user) return;
     supabase
@@ -43,7 +43,6 @@ function AppLayout() {
       .single()
       .then(({ data }) => {
         if (data?.role === "super_admin") {
-          // Super admin should be at /admin, not /dashboard
           navigate({ to: "/admin", replace: true });
           return;
         }
@@ -53,14 +52,15 @@ function AppLayout() {
       });
   }, [user, loading, navigate]);
 
-  // ── Redirect unauthenticated users ───────────────────────
+  // ── Redirect unauthenticated users ──
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", replace: true });
   }, [user, loading, navigate]);
 
-  // ── Close sidebar on route change ────────────────────────
+  // ── Close sidebar on route change ──
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
+  // Show spinner while loading or checking role
   if (loading || !user || orgLoading || !roleChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -76,7 +76,7 @@ function AppLayout() {
   const displayName = businessName ?? org?.name ?? "Your Store";
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex bg-background" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
       {/* Sidebar overlay (mobile) */}
       {sidebarOpen && (
@@ -91,7 +91,6 @@ function AppLayout() {
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         md:translate-x-0 md:static md:z-auto md:flex
       `}>
-
         {/* Logo */}
         <div className="p-5 border-b border-sidebar-border">
           <div className="flex items-center justify-between">
@@ -114,19 +113,19 @@ function AppLayout() {
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40 px-3 mb-2">Menu</div>
-          {NAV.map(n => {
+          {NAV.map((n) => {
             const active = location.pathname.startsWith(n.to);
             return (
               <Link key={n.to} to={n.to} className={`
                 group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium
-                transition-all duration-150
+                transition-all duration-150 relative
                 ${active
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
                 }
               `}>
                 <n.icon className="size-4 shrink-0" />
-                <span className="flex-1 min-w-0">{n.label}</span>
+                <div className="flex-1 min-w-0">{n.label}</div>
                 {active && <ChevronRight className="size-3 opacity-60" />}
               </Link>
             );
@@ -140,7 +139,7 @@ function AppLayout() {
               {isExpired ? "⚠ Trial Ended" : `⏳ ${trialDaysLeft} days left`}
             </div>
             <div className="text-muted-foreground mb-2">
-              {isExpired ? "Upgrade to continue." : "You're on a free trial."}
+              {isExpired ? "Upgrade to continue using PosifyPro." : "You're on a free trial."}
             </div>
             <Link to="/pricing">
               <Button size="sm" variant={isExpired ? "destructive" : "default"} className="w-full h-7 text-xs">
@@ -175,7 +174,7 @@ function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 h-14 border-b bg-background/95 backdrop-blur">
+        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <button
             onClick={() => setSidebarOpen(o => !o)}
             className="flex items-center justify-center size-9 rounded-lg border border-border hover:bg-accent transition-colors"
