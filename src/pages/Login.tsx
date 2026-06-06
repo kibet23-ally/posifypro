@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { signIn, resetPassword } from '@/lib/auth'
+import { supabase } from '@/integrations/supabase/client'
 
 export default function Login() {
   const navigate = useNavigate()
