@@ -44,6 +44,7 @@ function Dashboard() {
   // ── Super admin guard: redirect to /admin ──
   useEffect(() => {
     if (!user) return;
+
     supabase
       .from("profiles")
       .select("role")
@@ -51,10 +52,11 @@ function Dashboard() {
       .single()
       .then(({ data }) => {
         if (data?.role === "super_admin") {
-          console.log("🚀 Redirecting super admin...");
-          window.location.href = "/admin";   // Strong force
+          console.log("🚀 Dashboard guard: Forcing redirect to /admin");
+          window.location.href = "/admin";  // Strong browser redirect
         }
-      });
+      })
+      .catch(console.error);
   }, [user]);
 
   const { data, isLoading } = useQuery({
