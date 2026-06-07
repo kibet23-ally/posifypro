@@ -15,7 +15,9 @@ import LicenseGuard from "@/components/LicenseGuard";
 export const Route = createFileRoute("/_app")({
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw redirect({ to: "/login" });
+    if (!session?.user) {
+      throw redirect({ to: "/login" });
+    }
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -24,7 +26,7 @@ export const Route = createFileRoute("/_app")({
       .single();
 
     if (profile?.role === "super_admin") {
-      console.log("🚀 beforeLoad: Super admin redirecting to /admin");
+      console.log("🚀 beforeLoad: Super admin → /admin");
       throw redirect({ to: "/admin", replace: true });
     }
   },
