@@ -18,7 +18,7 @@ function AdminRoute() {
       navigate({ to: "/login", replace: true });
       return;
     }
-    if (role && role !== "super_admin") {
+    if (role !== "super_admin") {
       navigate({ to: "/dashboard", replace: true });
     }
   }, [user, role, loading, navigate]);
