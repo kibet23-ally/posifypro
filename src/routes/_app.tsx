@@ -1,4 +1,9 @@
-import { createFileRoute, Outlet, Link, useNavigate, useLocation } from "@tanstack/react-router";
+// src/routes/_app.tsx
+// COMPLETE REWRITE - Super admin routing fix
+import {
+  createFileRoute, Outlet, Link,
+  useNavigate, useLocation, redirect,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useOrg } from "@/hooks/use-org";
@@ -8,12 +13,38 @@ import {
   UserPlus, Menu, X, ChevronRight, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import LicenseGuard from "@/components/LicenseGuard";
 
+// ── beforeLoad: runs on SERVER before component mounts ──────
+// This is the ONLY reliable way to block super_admin from /_app
 export const Route = createFileRoute("/_app")({
+  beforeLoad: async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    // Not logged in → go to login
+    if (!session?.user) {
+      throw redirect({ to: "/login" });
+    }
+
+    // Fetch role
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    // Super admin must never see the business layout
+    if (profile?.role === "super_admin") {
+      throw redirect({ to: "/admin" });
+    }
+  },
   component: AppLayout,
 });
 
+// ── Nav items (only for regular business users) ─────────────
 const NAV = [
   { to: "/dashboard", label: "Dashboard",    icon: LayoutDashboard },
   { to: "/pos",       label: "Point of Sale", icon: ShoppingCart   },
@@ -25,62 +56,72 @@ const NAV = [
 ] as const;
 
 function AppLayout() {
-  const { user, role, loading, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const { org, isLifetime, isExpired, trialDaysLeft, loading: orgLoading } = useOrg();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [businessName, setBusinessName] = useState<string | null>(null);
 
+  // Fetch business name from tenants table (NOT organizations)
   useEffect(() => {
-    if (!loading && user && role === "super_admin") {
-      navigate({ to: "/admin", replace: true });
-    }
-  }, [user, role, loading, navigate]);
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("tenants(name)")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const name = (data?.tenants as any)?.name;
+        if (name) setBusinessName(name);
+      });
+  }, [user]);
 
-  useEffect(() => {
-    if (org?.name) setBusinessName(org.name);
-  }, [org?.name]);
-
-  // Redirect unauthenticated users
+  // Redirect unauthenticated
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", replace: true });
   }, [user, loading, navigate]);
 
-  // Close sidebar on route change
+  // Close sidebar on navigation
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
-  // Show loading while checking role
-  if (loading || !user || role === "super_admin" || orgLoading) {
+  if (loading || !user || orgLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="size-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading your workspace…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         </div>
       </div>
     );
   }
 
-  const currentNav = NAV.find(n => location.pathname.startsWith(n.to));
   const displayName = businessName ?? org?.name ?? "Your Store";
+  const currentNav = NAV.find(n => location.pathname.startsWith(n.to));
 
   return (
-    <div className="min-h-screen flex bg-background" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-
-      {/* Sidebar overlay (mobile) */}
+    <div
+      className="min-h-screen flex bg-background"
+      style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    >
+      {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
       {/* Sidebar */}
-      <aside className={`
-        fixed top-0 left-0 h-full z-50 flex flex-col
-        w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border
-        transition-transform duration-250 ease-in-out
-        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-        md:translate-x-0 md:static md:z-auto md:flex
-      `}>
+      <aside
+        className={`
+          fixed top-0 left-0 h-full z-50 flex flex-col
+          w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border
+          transition-transform duration-250 ease-in-out
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          md:translate-x-0 md:static md:z-auto md:flex
+        `}
+      >
         {/* Logo */}
         <div className="p-5 border-b border-sidebar-border">
           <div className="flex items-center justify-between">
@@ -88,51 +129,82 @@ function AppLayout() {
               <div className="bg-primary rounded-lg p-1.5">
                 <Zap className="size-4 text-primary-foreground" />
               </div>
-              <span className="font-extrabold text-base tracking-tight">PosifyPro</span>
+              <span className="font-extrabold text-base tracking-tight">
+                PosifyPro
+              </span>
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="md:hidden text-sidebar-foreground/50 hover:text-sidebar-foreground">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            >
               <X className="size-5" />
             </button>
           </div>
           <div className="mt-3 px-1">
-            <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40 mb-0.5">Business</div>
-            <div className="text-sm font-semibold truncate text-sidebar-foreground">{displayName}</div>
+            <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40 mb-0.5">
+              Business
+            </div>
+            <div className="text-sm font-semibold truncate text-sidebar-foreground">
+              {displayName}
+            </div>
           </div>
         </div>
 
-        {/* Nav */}
+        {/* Nav links */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40 px-3 mb-2">Menu</div>
+          <div className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40 px-3 mb-2">
+            Menu
+          </div>
           {NAV.map((n) => {
             const active = location.pathname.startsWith(n.to);
             return (
-              <Link key={n.to} to={n.to} className={`
-                group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium
-                transition-all duration-150 relative
-                ${active
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-                }
-              `}>
+              <Link
+                key={n.to}
+                to={n.to}
+                className={`
+                  group flex items-center gap-3 rounded-lg px-3 py-2.5
+                  text-sm font-medium transition-all duration-150
+                  ${active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                  }
+                `}
+              >
                 <n.icon className="size-4 shrink-0" />
-                <div className="flex-1 min-w-0">{n.label}</div>
+                <span className="flex-1 min-w-0">{n.label}</span>
                 {active && <ChevronRight className="size-3 opacity-60" />}
               </Link>
             );
           })}
         </nav>
 
-        {/* Plan badge */}
+        {/* Trial / upgrade badge */}
         {!isLifetime && (
-          <div className={`mx-3 mb-3 rounded-xl p-3 text-xs ${isExpired ? "bg-destructive/10 border border-destructive/20" : "bg-primary/8 border border-primary/20"}`}>
-            <div className={`font-semibold mb-1 ${isExpired ? "text-destructive" : "text-primary"}`}>
+          <div
+            className={`mx-3 mb-3 rounded-xl p-3 text-xs ${
+              isExpired
+                ? "bg-destructive/10 border border-destructive/20"
+                : "bg-primary/8 border border-primary/20"
+            }`}
+          >
+            <div
+              className={`font-semibold mb-1 ${
+                isExpired ? "text-destructive" : "text-primary"
+              }`}
+            >
               {isExpired ? "⚠ Trial Ended" : `⏳ ${trialDaysLeft} days left`}
             </div>
             <div className="text-muted-foreground mb-2">
-              {isExpired ? "Upgrade to continue using PosifyPro." : "You're on a free trial."}
+              {isExpired
+                ? "Upgrade to continue using PosifyPro."
+                : "You're on a free trial."}
             </div>
             <Link to="/pricing">
-              <Button size="sm" variant={isExpired ? "destructive" : "default"} className="w-full h-7 text-xs">
+              <Button
+                size="sm"
+                variant={isExpired ? "destructive" : "default"}
+                className="w-full h-7 text-xs"
+              >
                 Upgrade Plan
               </Button>
             </Link>
@@ -146,31 +218,44 @@ function AppLayout() {
               {user.email?.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium truncate text-sidebar-foreground">{user.email}</div>
-              <div className="text-[10px] text-sidebar-foreground/50">{displayName}</div>
+              <div className="text-xs font-medium truncate text-sidebar-foreground">
+                {user.email}
+              </div>
+              <div className="text-[10px] text-sidebar-foreground/50">
+                {displayName}
+              </div>
             </div>
           </div>
           <Button
-            variant="ghost" size="sm"
+            variant="ghost"
+            size="sm"
             className="w-full justify-start text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground gap-2 mt-1"
-            onClick={async () => { await signOut(); navigate({ to: "/login" }); }}
+            onClick={async () => {
+              await signOut();
+              navigate({ to: "/login" });
+            }}
           >
             <LogOut className="size-4" /> Sign out
           </Button>
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex items-center gap-3 px-4 h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <button
-            onClick={() => setSidebarOpen(o => !o)}
+            onClick={() => setSidebarOpen((o) => !o)}
             className="flex items-center justify-center size-9 rounded-lg border border-border hover:bg-accent transition-colors"
+            aria-label="Toggle sidebar"
           >
-            {sidebarOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+            {sidebarOpen ? (
+              <X className="size-4" />
+            ) : (
+              <Menu className="size-4" />
+            )}
           </button>
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShoppingBag className="size-3" />
@@ -178,14 +263,24 @@ function AppLayout() {
               {currentNav && (
                 <>
                   <ChevronRight className="size-3" />
-                  <span className="text-foreground font-medium">{currentNav.label}</span>
+                  <span className="text-foreground font-medium">
+                    {currentNav.label}
+                  </span>
                 </>
               )}
             </div>
             <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-              {new Date().toLocaleDateString("en-KE", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+              {new Date().toLocaleDateString("en-KE", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
               {" · "}
-              {new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}
+              {new Date().toLocaleTimeString("en-KE", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </div>
           </div>
         </header>
