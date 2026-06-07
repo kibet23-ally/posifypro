@@ -65,10 +65,19 @@ function Dashboard() {
       .eq("id", user.id)
       .single()
       .then(({ data, error }) => {
-        if (error) console.error("Role check error:", error);
+        if (error) {
+          console.error("❌ Role check error:", error);
+          return;
+        }
+
         if (data?.role === "super_admin" || data?.role?.toLowerCase().includes("super")) {
-          console.log("🚀 Redirecting super admin to /admin");
+          console.log("🚀 SUPER ADMIN DETECTED → Redirecting to /admin");
           navigate({ to: "/admin", replace: true });
+
+          // Backup force redirect if TanStack Router fails
+          setTimeout(() => {
+            window.location.href = "/admin";
+          }, 1000);
         }
       })
       .catch(err => console.error("Redirect error:", err));
