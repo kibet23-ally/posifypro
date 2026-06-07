@@ -13,8 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import LicenseGuard from "@/components/LicenseGuard";
 
 export const Route = createFileRoute("/_app")({
-  // beforeLoad runs BEFORE component renders - blocks super admin from seeing business dashboard
-  beforeLoad: async () => {
+  // Improved super admin redirect
+  beforeLoad: async ({ context }) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/login" });
 
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_app")({
       .single();
 
     if (profile?.role === "super_admin") {
-      throw redirect({ to: "/admin" });
+      throw redirect({ to: "/admin", replace: true });
     }
   },
   component: AppLayout,
