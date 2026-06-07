@@ -1,6 +1,5 @@
 // src/routes/_app.dashboard.tsx
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -37,43 +36,24 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 };
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { org } = useOrg();
-  const navigate = useNavigate();
-
-  // ── Super admin guard: redirect to /admin ──
-  useEffect(() => {
-    if (!user) return;
-
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.role === "super_admin") {
-          console.log("🚀 Dashboard guard: Forcing redirect to /admin");
-          window.location.href = "/admin";  // Strong browser redirect
-        }
-      })
-      .catch(console.error);
-  }, [user]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-stats-v2", user?.id],
-    enabled: !!user,
+    enabled: !!user && role !== "super_admin",
     queryFn: async () => {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("tenant_id, role, tenants(name, currency)")
+        .select("org_id, role")
         .eq("id", user!.id)
         .single();
 
       // Don't load data for super admin
       if (profile?.role === "super_admin") return null;
 
-      const tid = profile?.tenant_id;
-      const businessName = (profile?.tenants as any)?.name ?? null;
+      const tid = profile?.org_id;
+      const businessName = org?.name ?? null;
       if (!tid) return { businessName, empty: true };
 
       const now = new Date();
@@ -85,20 +65,20 @@ function Dashboard() {
 
       const [todayOrders, yesterdayOrders, weekOrders, monthOrders,
         products, customers, lowStock, recentOrders] = await Promise.all([
-        supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
-        supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
-        supabase.from("orders").select("total_amount, created_at").eq("tenant_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
-        supabase.from("orders").select("total_amount, created_at, payment_method").eq("tenant_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
-        supabase.from("products").select("*", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true),
-        supabase.from("customers").select("*", { count: "exact", head: true }).eq("tenant_id", tid),
-        supabase.from("products").select("id, name, stock_quantity, image_url").eq("tenant_id", tid).eq("is_active", true).lte("stock_quantity", 10).order("stock_quantity").limit(6),
-        supabase.from("orders").select("id, order_number, total_amount, payment_method, created_at, profiles(full_name)").eq("tenant_id", tid).order("created_at", { ascending: false }).limit(8),
+        supabase.from("sales").select("total").eq("org_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
+        supabase.from("sales").select("total").eq("org_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
+        supabase.from("sales").select("total, created_at").eq("org_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
+        supabase.from("sales").select("total, created_at, payment_method").eq("org_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
+        supabase.from("products").select("*", { count: "exact", head: true }).eq("org_id", tid).eq("is_active", true),
+        supabase.from("customers").select("*", { count: "exact", head: true }).eq("org_id", tid),
+        supabase.from("products").select("id, name, stock, emoji").eq("org_id", tid).eq("is_active", true).lte("stock", 10).order("stock").limit(6),
+        supabase.from("sales").select("id, receipt_number, total, payment_method, created_at, cashier_name").eq("org_id", tid).order("created_at", { ascending: false }).limit(8),
       ]);
 
-      const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const yesterdayRevenue = (yesterdayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const weekRevenue = (weekOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const monthRevenue = (monthOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
+      const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const yesterdayRevenue = (yesterdayOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const weekRevenue = (weekOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const monthRevenue = (monthOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
       const todayCount = todayOrders.data?.length ?? 0;
       const yesterdayCount = yesterdayOrders.data?.length ?? 0;
 
@@ -110,7 +90,7 @@ function Dashboard() {
         });
         return {
           day: d.toLocaleDateString("en-KE", { weekday: "short" }),
-          revenue: dayOrders.reduce((s, o) => s + Number(o.total_amount), 0),
+          revenue: dayOrders.reduce((s, o) => s + Number(o.total), 0),
           orders: dayOrders.length,
         };
       });
