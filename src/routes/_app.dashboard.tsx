@@ -287,12 +287,12 @@ function Dashboard() {
                     {METHOD_ICON[r.payment_method] ?? "🧾"}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold">{r.order_number}</div>
+                    <div className="text-sm font-semibold">{r.receipt_number}</div>
                     <div className="text-xs text-muted-foreground">
-                      {(r.profiles as any)?.full_name ?? "Walk-in"} · <span className="capitalize">{r.payment_method}</span>
+                      {r.cashier_name ?? "Walk-in"} · <span className="capitalize">{r.payment_method}</span>
                     </div>
                   </div>
-                  <div className="text-sm font-bold">{fmtMoney(Number(r.total_amount))}</div>
+                  <div className="text-sm font-bold">{fmtMoney(Number(r.total))}</div>
                 </div>
               );
             })}
@@ -314,20 +314,18 @@ function Dashboard() {
               <>
                 {(data?.lowStock ?? []).map((p: any) => (
                   <div key={p.id} className="flex items-center gap-2 text-sm">
-                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                      {p.image_url ? <img src={p.image_url} className="size-8 object-cover rounded-lg" alt="" /> : "📦"}
-                    </div>
+                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">{p.emoji ?? "📦"}</div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate text-xs">{p.name}</div>
                       <div className="w-full bg-muted rounded-full h-1 mt-1">
                         <div className="h-1 rounded-full" style={{
-                          width: `${Math.min(100, (p.stock_quantity / 10) * 100)}%`,
-                          background: p.stock_quantity === 0 ? "#ef4444" : p.stock_quantity <= 3 ? "#f59e0b" : "#10b981",
+                          width: `${Math.min(100, ((p.stock ?? 0) / 10) * 100)}%`,
+                          background: (p.stock ?? 0) === 0 ? "#ef4444" : (p.stock ?? 0) <= 3 ? "#f59e0b" : "#10b981",
                         }} />
                       </div>
                     </div>
-                    <span className={`text-xs font-bold shrink-0 ${p.stock_quantity === 0 ? "text-destructive" : "text-amber-500"}`}>
-                      {p.stock_quantity === 0 ? "Out!" : p.stock_quantity}
+                    <span className={`text-xs font-bold shrink-0 ${(p.stock ?? 0) === 0 ? "text-destructive" : "text-amber-500"}`}>
+                      {(p.stock ?? 0) === 0 ? "Out!" : p.stock}
                     </span>
                   </div>
                 ))}
