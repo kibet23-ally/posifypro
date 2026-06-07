@@ -13,7 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import LicenseGuard from "@/components/LicenseGuard";
 
 export const Route = createFileRoute("/_app")({
-  beforeLoad: async () => {
+  component: AppLayout,
+});
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
       throw redirect({ to: "/login" });
@@ -45,24 +46,31 @@ const NAV = [
 
 function AppLayout() {
   const { user, loading, signOut } = useAuth();
-  const { org, ... } = useOrg();
+  const { org, isLifetime, isExpired, trialDaysLeft, loading: orgLoading } = useOrg();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Emergency super admin force redirect
+  // 🔥 SUPER ADMIN FORCE REDIRECT (Emergency)
   useEffect(() => {
-    if (user) {
-      supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-        .then(({ data }) => {
-          if (data?.role === "super_admin") {
-            window.location.href = "/admin";
-          }
-        });
-    }
-  }, [user]);
+    if (!user || loading) return;
+
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.role === "super_admin") {
+          console.log("🚀 Force redirecting super admin to /admin");
+          window.location.href = "/admin";   // Strong browser redirect
+        }
+      })
+      .catch(console.error);
+  }, [user, loading]);
+
+  // Rest of your original code...
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // ... keep everything else the same
 
   // Fetch business name from tenants table
   useEffect(() => {
