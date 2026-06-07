@@ -19,21 +19,6 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/_app/dashboard")({
-  // Block super admin from seeing business dashboard
-  beforeLoad: async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw redirect({ to: "/login" });
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .single();
-
-    if (profile?.role === "super_admin") {
-      throw redirect({ to: "/admin" });
-    }
-  },
   component: Dashboard,
 });
 
@@ -53,47 +38,23 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 
 function Dashboard() {
   const { user } = useAuth();
+  const { org } = useOrg();
   const navigate = useNavigate();
 
-  // ── Hard redirect for super admins ──
+  // ── Super admin guard: redirect to /admin ──
   useEffect(() => {
     if (!user) return;
-
     supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single()
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("❌ Role check error:", error);
-          return;
+      .then(({ data }) => {
+        if (data?.role === "super_admin") {
+          window.location.href = "/admin";
         }
-
-        if (data?.role === "super_admin" || data?.role?.toLowerCase().includes("super")) {
-          console.log("🚀 SUPER ADMIN DETECTED → Redirecting to /admin");
-          navigate({ to: "/admin", replace: true });
-
-          // Backup force redirect if TanStack Router fails
-          setTimeout(() => {
-            window.location.href = "/admin";
-          }, 1000);
-        }
-      })
-      .catch(err => console.error("Redirect error:", err));
-  }, [user, navigate]);
-
-  const { org } = useOrg();
-
-  // Safety: Don't render business dashboard for super admins
-  if (user && !org) {
-    return (
-      <div className="p-8 text-center">
-        <div className="animate-spin mx-auto size-8 border-4 border-primary border-t-transparent rounded-full mb-4" />
-        <p>Redirecting to Admin Panel...</p>
-      </div>
-    );
-  }
+      });
+  }, [user]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-stats-v2", user?.id],
@@ -101,31 +62,35 @@ function Dashboard() {
     queryFn: async () => {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("tenant_id, tenants(name, currency)")
+        .select("tenant_id, role, tenants(name, currency)")
         .eq("id", user!.id)
         .single();
+
+      // Don't load data for super admin
+      if (profile?.role === "super_admin") return null;
+
       const tid = profile?.tenant_id;
       const businessName = (profile?.tenants as any)?.name ?? null;
-
       if (!tid) return { businessName, empty: true };
 
       const now = new Date();
       const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
       const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
       const monthAgo = new Date(now); monthAgo.setDate(now.getDate() - 30);
-      const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(todayStart.getDate() - 1);
+      const yesterdayStart = new Date(todayStart);
+      yesterdayStart.setDate(todayStart.getDate() - 1);
 
-      const [todayOrders, yesterdayOrders, weekOrders, monthOrders, products, customers, lowStock, recentOrders] =
-        await Promise.all([
-          supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
-          supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
-          supabase.from("orders").select("total_amount, created_at").eq("tenant_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
-          supabase.from("orders").select("total_amount, created_at, payment_method").eq("tenant_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
-          supabase.from("products").select("*", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true),
-          supabase.from("customers").select("*", { count: "exact", head: true }).eq("tenant_id", tid),
-          supabase.from("products").select("id, name, stock_quantity, image_url").eq("tenant_id", tid).eq("is_active", true).lte("stock_quantity", 10).order("stock_quantity").limit(6),
-          supabase.from("orders").select("id, order_number, total_amount, payment_method, created_at, profiles(full_name)").eq("tenant_id", tid).order("created_at", { ascending: false }).limit(8),
-        ]);
+      const [todayOrders, yesterdayOrders, weekOrders, monthOrders,
+        products, customers, lowStock, recentOrders] = await Promise.all([
+        supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
+        supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
+        supabase.from("orders").select("total_amount, created_at").eq("tenant_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
+        supabase.from("orders").select("total_amount, created_at, payment_method").eq("tenant_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
+        supabase.from("products").select("*", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true),
+        supabase.from("customers").select("*", { count: "exact", head: true }).eq("tenant_id", tid),
+        supabase.from("products").select("id, name, stock_quantity, image_url").eq("tenant_id", tid).eq("is_active", true).lte("stock_quantity", 10).order("stock_quantity").limit(6),
+        supabase.from("orders").select("id, order_number, total_amount, payment_method, created_at, profiles(full_name)").eq("tenant_id", tid).order("created_at", { ascending: false }).limit(8),
+      ]);
 
       const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
       const yesterdayRevenue = (yesterdayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
@@ -170,24 +135,36 @@ function Dashboard() {
     },
   });
 
-  const KPIs = [
-    { label: "Today's Revenue", value: fmtMoney(data?.todayRevenue ?? 0), sub: `vs ${fmtMoney(data?.yesterdayRevenue ?? 0)} yesterday`, icon: DollarSign, color: "#6366f1", bg: "#f5f3ff", trend: data?.revenueGrowth },
-    { label: "Today's Orders",  value: String(data?.todayCount ?? 0), sub: `${data?.yesterdayCount ?? 0} yesterday`, icon: ShoppingCart, color: "#10b981", bg: "#f0fdf4", trend: data?.orderGrowth },
-    { label: "This Week",       value: fmtMoney(data?.weekRevenue ?? 0), sub: "Last 7 days", icon: TrendingUp, color: "#f59e0b", bg: "#fffbeb" },
-    { label: "This Month",      value: fmtMoney(data?.monthRevenue ?? 0), sub: "Last 30 days", icon: Receipt, color: "#3b82f6", bg: "#eff6ff" },
-    { label: "Products",        value: String(data?.products ?? 0), sub: `${data?.lowStock.length ?? 0} low stock`, icon: Package, color: "#8b5cf6", bg: "#f5f3ff" },
-    { label: "Customers",       value: String(data?.customers ?? 0), sub: "Total registered", icon: Users, color: "#ec4899", bg: "#fdf2f8" },
-  ];
+  // Show redirect screen for super admin
+  if (data === null || (!isLoading && data === null)) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center flex-col gap-3">
+        <div className="size-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        <p className="text-sm text-muted-foreground">Redirecting to Admin Panel...</p>
+      </div>
+    );
+  }
 
   const PAYMENT_COLORS: Record<string, string> = {
     Cash: "#10b981", Mpesa: "#3b82f6", Card: "#8b5cf6", Other: "#94a3b8",
   };
 
+  const KPIs = [
+    { label: "Today's Revenue", value: fmtMoney(data?.todayRevenue ?? 0), sub: `vs ${fmtMoney(data?.yesterdayRevenue ?? 0)} yesterday`, icon: DollarSign, color: "#6366f1", bg: "#f5f3ff", trend: data?.revenueGrowth },
+    { label: "Today's Orders",  value: String(data?.todayCount ?? 0), sub: `${data?.yesterdayCount ?? 0} yesterday`, icon: ShoppingCart, color: "#10b981", bg: "#f0fdf4", trend: data?.orderGrowth },
+    { label: "This Week",       value: fmtMoney(data?.weekRevenue ?? 0), sub: "Last 7 days", icon: TrendingUp, color: "#f59e0b", bg: "#fffbeb" },
+    { label: "This Month",      value: fmtMoney(data?.monthRevenue ?? 0), sub: "Last 30 days", icon: Receipt, color: "#3b82f6", bg: "#eff6ff" },
+    { label: "Products",        value: String(data?.products ?? 0), sub: `${data?.lowStock?.length ?? 0} low stock`, icon: Package, color: "#8b5cf6", bg: "#f5f3ff" },
+    { label: "Customers",       value: String(data?.customers ?? 0), sub: "Total registered", icon: Users, color: "#ec4899", bg: "#fdf2f8" },
+  ];
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-muted animate-pulse rounded-xl" />)}
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-28 bg-muted animate-pulse rounded-xl" />
+          ))}
         </div>
       </div>
     );
@@ -260,7 +237,7 @@ function Dashboard() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
+              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
               <Tooltip content={<ChartTooltip />} />
               <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={2.5} fill="url(#revGrad)" name="revenue" />
             </AreaChart>
@@ -352,7 +329,7 @@ function Dashboard() {
               <>
                 {(data?.lowStock ?? []).map((p: any) => (
                   <div key={p.id} className="flex items-center gap-2 text-sm">
-                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 text-sm overflow-hidden">
+                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
                       {p.image_url ? <img src={p.image_url} className="size-8 object-cover rounded-lg" alt="" /> : "📦"}
                     </div>
                     <div className="flex-1 min-w-0">
