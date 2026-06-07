@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
+
+type OrganizationUpdate = Database["public"]["Tables"]["organizations"]["Update"];
 
 const planSchema = z.enum(["free", "basic", "pro", "enterprise"]);
 const licenseStatusSchema = z.enum(["trial", "active", "lifetime", "expired"]);
@@ -111,7 +114,7 @@ export const setBusinessStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await getAdminClientForSuperAdmin(context.userId);
-    const payload: Record<string, string> = { license_status: data.licenseStatus };
+    const payload: OrganizationUpdate = { license_status: data.licenseStatus };
 
     if (data.licenseStatus === "active" || data.licenseStatus === "lifetime") {
       payload.purchased_at = new Date().toISOString();
@@ -135,7 +138,7 @@ export const setBusinessPlan = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const supabaseAdmin = await getAdminClientForSuperAdmin(context.userId);
     const nextStatus = statusFromPlan(data.plan);
-    const payload: Record<string, string> = { license_status: nextStatus };
+    const payload: OrganizationUpdate = { license_status: nextStatus };
 
     if (nextStatus === "active" || nextStatus === "lifetime") {
       payload.purchased_at = new Date().toISOString();
