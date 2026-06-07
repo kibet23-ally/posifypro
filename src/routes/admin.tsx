@@ -12,8 +12,25 @@ import {
 export const Route = createFileRoute("/admin")({ component: SuperAdminDashboard });
 
 function SuperAdminDashboard() {
+  console.log("✅ Super Admin Dashboard Mounted!");   // ← Debug line
+
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // Optional: Redirect back if not super admin
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.role !== "super_admin") {
+          navigate({ to: "/dashboard", replace: true });
+        }
+      });
+  }, [user, navigate]);
 
   // Optional: Redirect back if not super admin
   useEffect(() => {
