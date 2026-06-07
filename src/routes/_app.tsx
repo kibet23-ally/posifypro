@@ -13,8 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import LicenseGuard from "@/components/LicenseGuard";
 
 export const Route = createFileRoute("/_app")({
-  // Improved super admin redirect
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw redirect({ to: "/login" });
 
@@ -25,6 +24,7 @@ export const Route = createFileRoute("/_app")({
       .single();
 
     if (profile?.role === "super_admin") {
+      console.log("🚀 beforeLoad: Redirecting super admin to /admin");
       throw redirect({ to: "/admin", replace: true });
     }
   },
