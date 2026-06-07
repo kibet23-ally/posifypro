@@ -450,7 +450,7 @@ export default function SuperAdminDashboard() {
                       </div>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a" }}>{t.name}</div>
-                        <div style={{ fontSize: 10, color: "#94a3b8" }}>/{t.slug}</div>
+                        <div style={{ fontSize: 10, color: "#94a3b8" }}>{t.owner_name ?? "Owner not set"}</div>
                       </div>
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -576,17 +576,17 @@ export default function SuperAdminDashboard() {
                         display: "flex", alignItems: "center", justifyContent: "center",
                         color: "#6366f1", fontWeight: 800, fontSize: 11,
                       }}>
-                        {(s.full_name ?? s.email ?? "?").charAt(0).toUpperCase()}
+                      {(s.name ?? s.email ?? "?").charAt(0).toUpperCase()}
                       </div>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a" }}>
-                          {s.full_name ?? "(no name)"}
+                          {s.name ?? "(no name)"}
                         </div>
                         <div style={{ fontSize: 11, color: "#94a3b8" }}>{s.email}</div>
                       </div>
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b" }}>
-                      {(s.tenants as any)?.name ?? "—"}
+                      {s.business_name ?? "—"}
                     </div>
                     <span style={{
                       fontSize: 11, fontWeight: 700, padding: "2px 8px",
