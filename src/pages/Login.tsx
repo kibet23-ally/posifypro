@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { signIn, resetPassword } from '@/lib/auth'
 import { supabase } from '@/integrations/supabase/client'
+import { getPostLoginRoute } from '@/lib/role-routing'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -24,11 +25,7 @@ export default function Login() {
         .select('role')
         .eq('id', user.id)
         .maybeSingle()
-      if (profile?.role === 'super_admin') {
-        navigate({ to: '/admin' })
-      } else {
-        navigate({ to: '/dashboard' })
-      }
+      navigate({ to: getPostLoginRoute(profile?.role) })
     } catch (err: any) {
       setError(err.message ?? 'Invalid email or password')
     } finally {
