@@ -1,5 +1,6 @@
 // src/routes/_app.dashboard.tsx
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -52,7 +53,38 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 
 function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // ── Hard redirect for super admins ──
+  useEffect(() => {
+    if (!user) return;
+
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) console.error("Role check error:", error);
+        if (data?.role === "super_admin" || data?.role?.toLowerCase().includes("super")) {
+          console.log("🚀 Redirecting super admin to /admin");
+          navigate({ to: "/admin", replace: true });
+        }
+      })
+      .catch(err => console.error("Redirect error:", err));
+  }, [user, navigate]);
+
   const { org } = useOrg();
+
+  // Safety: Don't render business dashboard for super admins
+  if (user && !org) {
+    return (
+      <div className="p-8 text-center">
+        <div className="animate-spin mx-auto size-8 border-4 border-primary border-t-transparent rounded-full mb-4" />
+        <p>Redirecting to Admin Panel...</p>
+      </div>
+    );
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-stats-v2", user?.id],
