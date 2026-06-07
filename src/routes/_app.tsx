@@ -1,5 +1,5 @@
 // src/routes/_app.tsx
-import { createFileRoute, Outlet, Link, useNavigate, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Link, useNavigate, useLocation, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useOrg } from "@/hooks/use-org";
@@ -12,7 +12,24 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import LicenseGuard from "@/components/LicenseGuard";
 
-export const Route = createFileRoute("/_app")({ component: AppLayout });
+export const Route = createFileRoute("/_app")({
+  // beforeLoad runs BEFORE component renders - blocks super admin from seeing business dashboard
+  beforeLoad: async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw redirect({ to: "/login" });
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .single();
+
+    if (profile?.role === "super_admin") {
+      throw redirect({ to: "/admin" });
+    }
+  },
+  component: AppLayout,
+});
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard",    icon: LayoutDashboard },
@@ -31,58 +48,30 @@ function AppLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [businessName, setBusinessName] = useState<string | null>(null);
-  const [roleChecked, setRoleChecked] = useState(false);
 
-  // ── Check role: redirect super admin to /admin ──
-useEffect(() => {
-  if (loading || !user) return;
+  // Fetch business name from tenants table
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("tenants(name)")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        const name = (data?.tenants as any)?.name;
+        if (name) setBusinessName(name);
+      });
+  }, [user]);
 
-  supabase
-    .from("profiles")
-    .select("role, tenants(name)")
-    .eq("id", user.id)
-    .single()
-    .then(({ data, error }) => {
-      if (error) {
-        console.error("❌ Profile query error:", error);
-        setRoleChecked(true);
-        return;
-      }
-
-      if (!data) {
-        console.warn("⚠️ No profile row found");
-        setRoleChecked(true);
-        return;
-      }
-
-      // Super Admin Check
-      if (data.role === "super_admin" || data.role?.toLowerCase().includes("super")) {
-        console.log("🚀 Super admin detected → redirecting");
-        navigate({ to: "/admin", replace: true });
-        return;
-      }
-
-      // Normal user
-      const name = (data?.tenants as any)?.name;
-      if (name) setBusinessName(name);
-      setRoleChecked(true);
-    })
-    .catch((err) => {
-      console.error("💥 Role check failed:", err);
-      setRoleChecked(true);
-    });
-}, [user, loading, navigate]);
-
-  // ── Redirect unauthenticated users ──
+  // Redirect unauthenticated users
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", replace: true });
   }, [user, loading, navigate]);
 
-  // ── Close sidebar on route change ──
+  // Close sidebar on route change
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
-  // Show spinner while loading or checking role
-  if (loading || !user || orgLoading || (user && !roleChecked)) {
+  if (loading || !user || orgLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
