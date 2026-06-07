@@ -86,6 +86,7 @@ function Dashboard() {
         const d = new Date(); d.setDate(d.getDate() - (6 - i)); d.setHours(0, 0, 0, 0);
         const dEnd = new Date(d); dEnd.setHours(23, 59, 59, 999);
         const dayOrders = (weekOrders.data ?? []).filter(o => {
+          if (!o.created_at) return false;
           const t = new Date(o.created_at); return t >= d && t <= dEnd;
         });
         return {
@@ -97,7 +98,8 @@ function Dashboard() {
 
       const methods: Record<string, number> = {};
       (monthOrders.data ?? []).forEach(o => {
-        methods[o.payment_method] = (methods[o.payment_method] ?? 0) + 1;
+        const method = o.payment_method ?? "Other";
+        methods[method] = (methods[method] ?? 0) + 1;
       });
       const paymentChart = Object.entries(methods).map(([name, value]) => ({
         name: name.charAt(0).toUpperCase() + name.slice(1), value,
