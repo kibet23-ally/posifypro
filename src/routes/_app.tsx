@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_app")({
       .single();
 
     if (profile?.role === "super_admin") {
-      console.log("🚀 beforeLoad: Redirecting super admin to /admin");
+      console.log("🚀 beforeLoad: Super admin redirecting to /admin");
       throw redirect({ to: "/admin", replace: true });
     }
   },
@@ -43,11 +43,24 @@ const NAV = [
 
 function AppLayout() {
   const { user, loading, signOut } = useAuth();
-  const { org, isLifetime, isExpired, trialDaysLeft, loading: orgLoading } = useOrg();
+  const { org, ... } = useOrg();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [businessName, setBusinessName] = useState<string | null>(null);
+
+  // Emergency super admin force redirect
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.role === "super_admin") {
+            window.location.href = "/admin";
+          }
+        });
+    }
+  }, [user]);
 
   // Fetch business name from tenants table
   useEffect(() => {
