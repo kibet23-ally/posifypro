@@ -1,5 +1,4 @@
-// src/routes/_app.tsx
-import { createFileRoute, Outlet, Link, useNavigate, useLocation, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useOrg } from "@/hooks/use-org";
@@ -13,24 +12,6 @@ import { supabase } from "@/integrations/supabase/client";
 import LicenseGuard from "@/components/LicenseGuard";
 
 export const Route = createFileRoute("/_app")({
-  component: AppLayout,
-});
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      throw redirect({ to: "/login" });
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .single();
-
-    if (profile?.role === "super_admin") {
-      console.log("🚀 beforeLoad: Super admin → /admin");
-      throw redirect({ to: "/admin", replace: true });
-    }
-  },
   component: AppLayout,
 });
 
@@ -49,8 +30,11 @@ function AppLayout() {
   const { org, isLifetime, isExpired, trialDaysLeft, loading: orgLoading } = useOrg();
   const navigate = useNavigate();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [businessName, setBusinessName] = useState<string | null>(null);
+  const [roleChecked, setRoleChecked] = useState(false);
 
-  // 🔥 SUPER ADMIN FORCE REDIRECT (Emergency)
+  // 🔥 SUPER ADMIN FORCE REDIRECT
   useEffect(() => {
     if (!user || loading) return;
 
@@ -61,30 +45,20 @@ function AppLayout() {
       .single()
       .then(({ data }) => {
         if (data?.role === "super_admin") {
-          console.log("🚀 Force redirecting super admin to /admin");
-          window.location.href = "/admin";   // Strong browser redirect
+          console.log("🚀 SUPER ADMIN DETECTED - Redirecting to /admin");
+          window.location.href = "/admin";
+          return;
         }
-      })
-      .catch(console.error);
-  }, [user, loading]);
-
-  // Rest of your original code...
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  // ... keep everything else the same
-
-  // Fetch business name from tenants table
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("profiles")
-      .select("tenants(name)")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
+        // Normal user - set business name
         const name = (data?.tenants as any)?.name;
         if (name) setBusinessName(name);
+        setRoleChecked(true);
+      })
+      .catch((err) => {
+        console.error("Role check error:", err);
+        setRoleChecked(true);
       });
-  }, [user]);
+  }, [user, loading]);
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -94,7 +68,8 @@ function AppLayout() {
   // Close sidebar on route change
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
-  if (loading || !user || orgLoading) {
+  // Show loading while checking role
+  if (loading || !user || orgLoading || (user && !roleChecked)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
