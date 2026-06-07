@@ -51,7 +51,8 @@ function Dashboard() {
       .single()
       .then(({ data }) => {
         if (data?.role === "super_admin") {
-          window.location.href = "/admin";
+          console.log("🚀 Redirecting super admin...");
+          window.location.href = "/admin";   // Strong force
         }
       });
   }, [user]);
