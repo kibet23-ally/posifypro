@@ -1,6 +1,5 @@
 // src/routes/_app.dashboard.tsx
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -37,43 +36,24 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 };
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { org } = useOrg();
-  const navigate = useNavigate();
-
-  // ── Super admin guard: redirect to /admin ──
-  useEffect(() => {
-    if (!user) return;
-
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.role === "super_admin") {
-          console.log("🚀 Dashboard guard: Forcing redirect to /admin");
-          window.location.href = "/admin";  // Strong browser redirect
-        }
-      })
-      .catch(console.error);
-  }, [user]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-stats-v2", user?.id],
-    enabled: !!user,
+    enabled: !!user && role !== "super_admin",
     queryFn: async () => {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("tenant_id, role, tenants(name, currency)")
+        .select("org_id, role")
         .eq("id", user!.id)
         .single();
 
       // Don't load data for super admin
       if (profile?.role === "super_admin") return null;
 
-      const tid = profile?.tenant_id;
-      const businessName = (profile?.tenants as any)?.name ?? null;
+      const tid = profile?.org_id;
+      const businessName = org?.name ?? null;
       if (!tid) return { businessName, empty: true };
 
       const now = new Date();
@@ -85,20 +65,20 @@ function Dashboard() {
 
       const [todayOrders, yesterdayOrders, weekOrders, monthOrders,
         products, customers, lowStock, recentOrders] = await Promise.all([
-        supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
-        supabase.from("orders").select("total_amount").eq("tenant_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
-        supabase.from("orders").select("total_amount, created_at").eq("tenant_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
-        supabase.from("orders").select("total_amount, created_at, payment_method").eq("tenant_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
-        supabase.from("products").select("*", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true),
-        supabase.from("customers").select("*", { count: "exact", head: true }).eq("tenant_id", tid),
-        supabase.from("products").select("id, name, stock_quantity, image_url").eq("tenant_id", tid).eq("is_active", true).lte("stock_quantity", 10).order("stock_quantity").limit(6),
-        supabase.from("orders").select("id, order_number, total_amount, payment_method, created_at, profiles(full_name)").eq("tenant_id", tid).order("created_at", { ascending: false }).limit(8),
+        supabase.from("sales").select("total").eq("org_id", tid).eq("status", "completed").gte("created_at", todayStart.toISOString()),
+        supabase.from("sales").select("total").eq("org_id", tid).eq("status", "completed").gte("created_at", yesterdayStart.toISOString()).lt("created_at", todayStart.toISOString()),
+        supabase.from("sales").select("total, created_at").eq("org_id", tid).eq("status", "completed").gte("created_at", weekAgo.toISOString()),
+        supabase.from("sales").select("total, created_at, payment_method").eq("org_id", tid).eq("status", "completed").gte("created_at", monthAgo.toISOString()),
+        supabase.from("products").select("*", { count: "exact", head: true }).eq("org_id", tid).eq("is_active", true),
+        supabase.from("customers").select("*", { count: "exact", head: true }).eq("org_id", tid),
+        supabase.from("products").select("id, name, stock, emoji").eq("org_id", tid).eq("is_active", true).lte("stock", 10).order("stock").limit(6),
+        supabase.from("sales").select("id, receipt_number, total, payment_method, created_at, cashier_name").eq("org_id", tid).order("created_at", { ascending: false }).limit(8),
       ]);
 
-      const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const yesterdayRevenue = (yesterdayOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const weekRevenue = (weekOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-      const monthRevenue = (monthOrders.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
+      const todayRevenue = (todayOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const yesterdayRevenue = (yesterdayOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const weekRevenue = (weekOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
+      const monthRevenue = (monthOrders.data ?? []).reduce((s, r) => s + Number(r.total), 0);
       const todayCount = todayOrders.data?.length ?? 0;
       const yesterdayCount = yesterdayOrders.data?.length ?? 0;
 
@@ -106,18 +86,20 @@ function Dashboard() {
         const d = new Date(); d.setDate(d.getDate() - (6 - i)); d.setHours(0, 0, 0, 0);
         const dEnd = new Date(d); dEnd.setHours(23, 59, 59, 999);
         const dayOrders = (weekOrders.data ?? []).filter(o => {
+          if (!o.created_at) return false;
           const t = new Date(o.created_at); return t >= d && t <= dEnd;
         });
         return {
           day: d.toLocaleDateString("en-KE", { weekday: "short" }),
-          revenue: dayOrders.reduce((s, o) => s + Number(o.total_amount), 0),
+          revenue: dayOrders.reduce((s, o) => s + Number(o.total), 0),
           orders: dayOrders.length,
         };
       });
 
       const methods: Record<string, number> = {};
       (monthOrders.data ?? []).forEach(o => {
-        methods[o.payment_method] = (methods[o.payment_method] ?? 0) + 1;
+        const method = o.payment_method ?? "Other";
+        methods[method] = (methods[method] ?? 0) + 1;
       });
       const paymentChart = Object.entries(methods).map(([name, value]) => ({
         name: name.charAt(0).toUpperCase() + name.slice(1), value,
@@ -305,12 +287,12 @@ function Dashboard() {
                     {METHOD_ICON[r.payment_method] ?? "🧾"}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold">{r.order_number}</div>
+                    <div className="text-sm font-semibold">{r.receipt_number}</div>
                     <div className="text-xs text-muted-foreground">
-                      {(r.profiles as any)?.full_name ?? "Walk-in"} · <span className="capitalize">{r.payment_method}</span>
+                      {r.cashier_name ?? "Walk-in"} · <span className="capitalize">{r.payment_method}</span>
                     </div>
                   </div>
-                  <div className="text-sm font-bold">{fmtMoney(Number(r.total_amount))}</div>
+                  <div className="text-sm font-bold">{fmtMoney(Number(r.total))}</div>
                 </div>
               );
             })}
@@ -332,20 +314,18 @@ function Dashboard() {
               <>
                 {(data?.lowStock ?? []).map((p: any) => (
                   <div key={p.id} className="flex items-center gap-2 text-sm">
-                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                      {p.image_url ? <img src={p.image_url} className="size-8 object-cover rounded-lg" alt="" /> : "📦"}
-                    </div>
+                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">{p.emoji ?? "📦"}</div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate text-xs">{p.name}</div>
                       <div className="w-full bg-muted rounded-full h-1 mt-1">
                         <div className="h-1 rounded-full" style={{
-                          width: `${Math.min(100, (p.stock_quantity / 10) * 100)}%`,
-                          background: p.stock_quantity === 0 ? "#ef4444" : p.stock_quantity <= 3 ? "#f59e0b" : "#10b981",
+                          width: `${Math.min(100, ((p.stock ?? 0) / 10) * 100)}%`,
+                          background: (p.stock ?? 0) === 0 ? "#ef4444" : (p.stock ?? 0) <= 3 ? "#f59e0b" : "#10b981",
                         }} />
                       </div>
                     </div>
-                    <span className={`text-xs font-bold shrink-0 ${p.stock_quantity === 0 ? "text-destructive" : "text-amber-500"}`}>
-                      {p.stock_quantity === 0 ? "Out!" : p.stock_quantity}
+                    <span className={`text-xs font-bold shrink-0 ${(p.stock ?? 0) === 0 ? "text-destructive" : "text-amber-500"}`}>
+                      {(p.stock ?? 0) === 0 ? "Out!" : p.stock}
                     </span>
                   </div>
                 ))}

@@ -8,7 +8,6 @@ import {
   UserPlus, Menu, X, ChevronRight, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import LicenseGuard from "@/components/LicenseGuard";
 
 export const Route = createFileRoute("/_app")({
@@ -26,39 +25,22 @@ const NAV = [
 ] as const;
 
 function AppLayout() {
-  const { user, loading, signOut } = useAuth();
+  const { user, role, loading, signOut } = useAuth();
   const { org, isLifetime, isExpired, trialDaysLeft, loading: orgLoading } = useOrg();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [businessName, setBusinessName] = useState<string | null>(null);
-  const [roleChecked, setRoleChecked] = useState(false);
 
-  // 🔥 SUPER ADMIN FORCE REDIRECT
   useEffect(() => {
-    if (!user || loading) return;
+    if (!loading && user && role === "super_admin") {
+      navigate({ to: "/admin", replace: true });
+    }
+  }, [user, role, loading, navigate]);
 
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.role === "super_admin") {
-          console.log("🚀 SUPER ADMIN DETECTED - Redirecting to /admin");
-          window.location.href = "/admin";
-          return;
-        }
-        // Normal user - set business name
-        const name = (data?.tenants as any)?.name;
-        if (name) setBusinessName(name);
-        setRoleChecked(true);
-      })
-      .catch((err) => {
-        console.error("Role check error:", err);
-        setRoleChecked(true);
-      });
-  }, [user, loading]);
+  useEffect(() => {
+    if (org?.name) setBusinessName(org.name);
+  }, [org?.name]);
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -69,7 +51,7 @@ function AppLayout() {
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   // Show loading while checking role
-  if (loading || !user || orgLoading || (user && !roleChecked)) {
+  if (loading || !user || role === "super_admin" || orgLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">

@@ -1,6 +1,7 @@
 // src/components/ProtectedRoute.tsx
 import { Navigate } from '@tanstack/react-router'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/use-auth'
+import { useOrg } from '@/hooks/use-org'
 import type { UserRole } from '@/lib/supabase'
 
 interface ProtectedRouteProps {
@@ -14,9 +15,10 @@ export function ProtectedRoute({
   allowedRoles,
   redirectTo = '/login',
 }: ProtectedRouteProps) {
-  const { session, profile, isLoading } = useAuth()
+  const { session, role, loading } = useAuth()
+  const { orgId, loading: orgLoading } = useOrg()
 
-  if (isLoading) {
+  if (loading || orgLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -24,13 +26,13 @@ export function ProtectedRoute({
     )
   }
 
-  if (!session || !profile) return <Navigate to={redirectTo} />
+  if (!session) return <Navigate to={redirectTo} />
 
-  if (allowedRoles && !allowedRoles.includes(profile.role)) {
+  if (allowedRoles && !allowedRoles.includes(role as UserRole)) {
     return <Navigate to="/unauthorized" />
   }
 
-  if (!profile.org_id && profile.role !== 'super_admin') {
+  if (!orgId && role !== 'super_admin') {
     return <Navigate to="/onboarding" />
   }
 

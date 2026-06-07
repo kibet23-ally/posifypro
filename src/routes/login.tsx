@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { getPostLoginRoute } from "@/lib/role-routing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,11 +32,7 @@ function LoginPage() {
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
-        if (data?.role === "super_admin") {
-          navigate({ to: "/admin", replace: true });
-        } else {
-          navigate({ to: "/dashboard", replace: true });
-        }
+        navigate({ to: getPostLoginRoute(data?.role), replace: true });
       });
   }, [user, loading, navigate]);
 
@@ -55,11 +52,7 @@ function LoginPage() {
         .eq("id", data.user.id)
         .single();
 
-      if (profile?.role === "super_admin") {
-        navigate({ to: "/admin", replace: true });
-      } else {
-        navigate({ to: "/dashboard", replace: true });
-      }
+      navigate({ to: getPostLoginRoute(profile?.role), replace: true });
     } catch (err: any) {
       toast.error(err.message ?? "Invalid email or password");
     } finally {
