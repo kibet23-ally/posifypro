@@ -1,9 +1,14 @@
 // src/pages/SuperAdminDashboard.tsx
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import LicenseManager from "@/components/admin/LicenseManager";
+import {
+  getSuperAdminOverview,
+  setBusinessPlan,
+  setBusinessStatus,
+} from "@/lib/super-admin.functions";
 import {
   LayoutDashboard, Building2, Users, LogOut,
   RefreshCw, Search, Key, Shield, TrendingUp,
@@ -15,12 +20,12 @@ type AdminTab = "overview" | "tenants" | "staff" | "licenses";
 interface Tenant {
   id: string;
   name: string;
-  slug: string;
-  email: string;
+  email: string | null;
+  owner_name: string | null;
+  license_status: string;
   plan: string;
   is_active: boolean;
   created_at: string;
-  currency: string;
   staff_count?: number;
   order_count?: number;
 }
@@ -71,8 +76,11 @@ const NAV_ITEMS: { id: AdminTab; label: string; icon: any }[] = [
 ];
 
 export default function SuperAdminDashboard() {
-  const { user, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const navigate = useNavigate();
+  const fetchOverview = useServerFn(getSuperAdminOverview);
+  const updateStatus = useServerFn(setBusinessStatus);
+  const updatePlan = useServerFn(setBusinessPlan);
   const [tab, setTab] = useState<AdminTab>("overview");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [allStaff, setAllStaff] = useState<any[]>([]);
@@ -83,66 +91,18 @@ export default function SuperAdminDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Guard: must be super_admin
   useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.role !== "super_admin") {
-          navigate({ to: "/dashboard" });
-        }
-      });
-  }, [user, navigate]);
+    if (!user) navigate({ to: "/login", replace: true });
+    if (user && role && role !== "super_admin") navigate({ to: "/dashboard", replace: true });
+  }, [user, role, navigate]);
 
   const load = useCallback(async () => {
     setRefreshing(true);
     setError(null);
     try {
-      // Fetch all tenants except the system posifypro tenant
-      const { data: tr, error: trErr } = await supabase
-        .from("tenants")
-        .select("*")
-        .neq("slug", "posifypro")
-        .order("created_at", { ascending: false });
-
-      if (trErr) throw trErr;
-      if (!tr) return;
-
-      // Enrich with staff + order counts
-      const enriched: Tenant[] = await Promise.all(
-        (tr as any[]).map(async (t) => {
-          const [sr, or] = await Promise.all([
-            supabase
-              .from("profiles")
-              .select("id", { count: "exact", head: true })
-              .eq("tenant_id", t.id),
-            supabase
-              .from("orders")
-              .select("id", { count: "exact", head: true })
-              .eq("tenant_id", t.id),
-          ]);
-          return {
-            ...t,
-            staff_count: sr.count ?? 0,
-            order_count: or.count ?? 0,
-          };
-        })
-      );
-      setTenants(enriched);
-
-      // All staff across all tenants
-      const { data: sd, error: sdErr } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, role, tenant_id, is_active, tenants(name)")
-        .neq("role", "super_admin")
-        .order("created_at", { ascending: false });
-
-      if (sdErr) throw sdErr;
-      setAllStaff((sd ?? []) as any[]);
+      const data = await fetchOverview();
+      setTenants(data.businesses as Tenant[]);
+      setAllStaff(data.staff);
 
     } catch (err: any) {
       setError(err.message ?? "Failed to load data");
@@ -150,33 +110,38 @@ export default function SuperAdminDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchOverview]);
 
   useEffect(() => { load(); }, [load]);
 
   const toggleStatus = async (t: Tenant) => {
     setActionLoading(true);
-    const { error } = await supabase
-      .from("tenants")
-      .update({ is_active: !t.is_active })
-      .eq("id", t.id);
-    if (!error) {
+    try {
+      await updateStatus({ data: { orgId: t.id, licenseStatus: t.is_active ? "expired" : "active" } });
       await load();
       setSelected(prev => prev ? { ...prev, is_active: !t.is_active } : null);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to update business status");
+    } finally {
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   const changePlan = async (t: Tenant, plan: string) => {
     setActionLoading(true);
-    await supabase.from("tenants").update({ plan }).eq("id", t.id);
-    await load();
-    setSelected(prev => prev ? { ...prev, plan } : null);
-    setActionLoading(false);
+    try {
+      await updatePlan({ data: { orgId: t.id, plan: plan as "free" | "basic" | "pro" | "enterprise" } });
+      await load();
+      setSelected(prev => prev ? { ...prev, plan } : null);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to update business plan");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     navigate({ to: "/login" });
   };
 
